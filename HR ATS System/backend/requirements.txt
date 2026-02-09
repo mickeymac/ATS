@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+motor
+pydantic[email]
+pydantic-settings
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+python-docx
+pdfplumber
+google-generativeai
+sentence-transformers
+numpy
+scikit-learn
+python-dotenv
+aiofiles
+emails
