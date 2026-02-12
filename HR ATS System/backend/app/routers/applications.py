@@ -18,6 +18,31 @@ UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
+async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
+    app["_id"] = str(app["_id"])
+
+    status_value = app.get("status", ApplicationStatus.APPLIED)
+    if isinstance(status_value, ApplicationStatus):
+        status_value = status_value.value
+    app["status"] = status_value
+
+    if "score" not in app:
+        app["score"] = app.get("final_score", 0.0)
+
+    candidate_id = app.get("candidate_id")
+    if not app.get("candidate_name") and candidate_id and ObjectId.is_valid(candidate_id):
+        user = await db.users.find_one({"_id": ObjectId(candidate_id)})
+        if user:
+            app["candidate_name"] = user.get("name")
+
+    job_id = app.get("job_id")
+    if not app.get("job_title") and job_id and ObjectId.is_valid(job_id):
+        job = await db.jobs.find_one({"_id": ObjectId(job_id)})
+        if job:
+            app["job_title"] = job.get("title")
+
+    return app
+
 @router.post("/apply", response_model=ApplicationInDB)
 async def apply_for_job(
     job_id: str = Form(...),
@@ -64,12 +89,15 @@ async def apply_for_job(
     application_doc = {
         "job_id": job_id,
         "candidate_id": current_user.id,
+        "candidate_name": current_user.name,
+        "job_title": job.get("title"),
         "resume_file_path": file_path,
         "extracted_text": extracted_text,
         "rule_score": scores["rule_score"],
         "semantic_score": scores["semantic_score"],
         "final_score": scores["final_score"],
-        "status": ApplicationStatus.APPLIED,
+        "score": scores["final_score"],
+        "status": ApplicationStatus.APPLIED.value,
         "applied_at": datetime.utcnow()
     }
     
@@ -77,6 +105,18 @@ async def apply_for_job(
     application_doc["_id"] = str(result.inserted_id)
     
     return ApplicationInDB(**application_doc)
+
+@router.get("/", response_model=List[ApplicationInDB])
+async def list_applications(
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    cursor = db.applications.find()
+    apps = []
+    async for app in cursor:
+        app = await _enrich_application(app, db)
+        apps.append(ApplicationInDB(**app))
+    return apps
 
 @router.get("/job/{job_id}", response_model=List[ApplicationInDB])
 async def get_job_applications(
@@ -87,7 +127,7 @@ async def get_job_applications(
     cursor = db.applications.find({"job_id": job_id})
     apps = []
     async for app in cursor:
-        app["_id"] = str(app["_id"])
+        app = await _enrich_application(app, db)
         apps.append(ApplicationInDB(**app))
     return apps
 
@@ -99,7 +139,7 @@ async def get_my_applications(
     cursor = db.applications.find({"candidate_id": current_user.id})
     apps = []
     async for app in cursor:
-        app["_id"] = str(app["_id"])
+        app = await _enrich_application(app, db)
         apps.append(ApplicationInDB(**app))
     return apps
 
@@ -114,13 +154,15 @@ async def update_application_status(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
         
+    status_value = status.value if isinstance(status, ApplicationStatus) else status
+
     await db.applications.update_one(
         {"_id": ObjectId(application_id)},
-        {"$set": {"status": status}}
+        {"$set": {"status": status_value}}
     )
     
     updated_app = await db.applications.find_one({"_id": ObjectId(application_id)})
-    updated_app["_id"] = str(updated_app["_id"])
+    updated_app = await _enrich_application(updated_app, db)
     
     # TODO: Send email notification
     

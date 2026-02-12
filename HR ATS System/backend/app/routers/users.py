@@ -5,6 +5,7 @@ from app.schemas.user import UserInDB, UserCreate, UserRole
 from app.core.security import get_password_hash
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
+from bson import ObjectId
 
 router = APIRouter()
 
@@ -43,3 +44,18 @@ async def create_user(
     result = await db.users.insert_one(user_doc)
     user_doc["_id"] = str(result.inserted_id)
     return UserInDB(**user_doc)
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User deleted successfully"}

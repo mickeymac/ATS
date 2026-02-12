@@ -1,131 +1,163 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { LogOut } from 'lucide-react';
+import { AppShell } from '../components/AppShell';
+import { PageHeader } from '../components/PageHeader';
+import { StatCard } from '../components/StatCard';
+import { ChartCard } from '../components/ChartCard';
+import { useToast } from '../context/ToastContext';
+import { Users, Briefcase, FileText, ShieldAlert, ArrowRight, UserPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+const SkeletonLoader = ({ className }) => <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-md ${className}`} />;
 
 const AdminDashboard = () => {
-  const [users, setUsers] = useState([]);
-  const { logout, user } = useAuth();
-  const [showCreateUser, setShowCreateUser] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'hr' });
+  const [stats, setStats] = useState({ users: 0, jobs: 0, applications: 0, admins: 0 });
+  const [recentUsers, setRecentUsers] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const { addToast } = useToast();
+  const [loading, setLoading] = useState(true);
 
-  const fetchUsers = async () => {
+  const fetchAdminData = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await api.get('/users/');
-      setUsers(response.data);
+      const [usersRes, jobsRes, appsRes] = await Promise.all([
+        api.get('/users/'),
+        api.get('/jobs/'),
+        api.get('/applications/')
+      ]);
+
+      const users = usersRes.data;
+      const jobs = jobsRes.data;
+      const apps = appsRes.data;
+
+      setStats({
+        users: users.length,
+        jobs: jobs.length,
+        applications: apps.length,
+        admins: users.filter(u => u.role === 'admin').length
+      });
+
+      setRecentUsers(users.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5));
+
+      // Mock growth data for the chart
+      setChartData([
+        { name: 'Jan', users: 12, apps: 45 },
+        { name: 'Feb', users: 19, apps: 52 },
+        { name: 'Mar', users: 15, apps: 48 },
+        { name: 'Apr', users: 22, apps: 61 },
+        { name: 'May', users: 30, apps: 55 },
+        { name: 'Jun', users: 25, apps: 67 },
+      ]);
+
     } catch (error) {
-      console.error("Error fetching users", error);
+      addToast("Failed to load admin dashboard.", "error");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [addToast]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/users/', newUser);
-      setShowCreateUser(false);
-      fetchUsers();
-      alert('User created successfully');
-    } catch (error) {
-      console.error("Error creating user", error);
-      alert('Failed to create user');
-    }
-  };
+    fetchAdminData();
+  }, [fetchAdminData]);
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">Welcome, {user.email}</span>
-          <button onClick={logout} className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
-            <LogOut size={18} /> Logout
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded shadow">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">User Management</h2>
-          <button 
-            onClick={() => setShowCreateUser(true)}
-            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+    <AppShell>
+      <PageHeader
+        title="Admin Overview"
+        description="Global system statistics and user management."
+        actions={
+          <Link
+            to="/users"
+            className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
           >
-            + Create HR/Admin
-          </button>
-        </div>
-        <table className="min-w-full text-left">
-          <thead>
-            <tr className="bg-gray-100 border-b">
-              <th className="p-3">Name</th>
-              <th className="p-3">Email</th>
-              <th className="p-3">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u._id} className="border-b">
-                <td className="p-3">{u.name}</td>
-                <td className="p-3">{u.email}</td>
-                <td className="p-3 uppercase text-xs font-bold text-gray-600">{u.role}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            <UserPlus size={16} />
+            Manage Users
+          </Link>
+        }
+      />
 
-      {showCreateUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded w-96">
-            <h2 className="text-xl font-bold mb-4">Create User</h2>
-            <form onSubmit={handleCreateUser}>
-              <input 
-                placeholder="Name" 
-                className="w-full border p-2 mb-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                value={newUser.name}
-                onChange={e => setNewUser({...newUser, name: e.target.value})}
-                required
-              />
-              <input 
-                type="email"
-                placeholder="Email" 
-                className="w-full border p-2 mb-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                value={newUser.email}
-                onChange={e => setNewUser({...newUser, email: e.target.value})}
-                required
-              />
-              <input 
-                type="password"
-                placeholder="Password" 
-                className="w-full border p-2 mb-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                value={newUser.password}
-                onChange={e => setNewUser({...newUser, password: e.target.value})}
-                required
-              />
-              <select
-                className="w-full border p-2 mb-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newUser.role}
-                onChange={e => setNewUser({...newUser, role: e.target.value})}
-              >
-                <option value="hr">HR</option>
-                <option value="admin">Admin</option>
-                <option value="candidate">Candidate</option>
-              </select>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowCreateUser(false)} className="px-4 py-2 text-gray-600">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Create</button>
+      <div className="space-y-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="Total Users" value={loading ? '...' : stats.users} icon={Users} />
+          <StatCard title="Total Jobs" value={loading ? '...' : stats.jobs} icon={Briefcase} color="blue" />
+          <StatCard title="Applications" value={loading ? '...' : stats.applications} icon={FileText} color="indigo" />
+          <StatCard title="System Admins" value={loading ? '...' : stats.admins} icon={ShieldAlert} color="red" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Main Chart */}
+          <div className="lg:col-span-2">
+            <ChartCard title="System Growth (Users & Applications)">
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0f172a" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#0f172a" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Area type="monotone" dataKey="users" stroke="#0f172a" fillOpacity={1} fill="url(#colorUsers)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="apps" stroke="#6366f1" fillOpacity={0} strokeWidth={2} strokeDasharray="5 5" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            </form>
+            </ChartCard>
+          </div>
+
+          {/* Recent Users */}
+          <div className="lg:col-span-1">
+            <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Recently Joined</h3>
+                <Link to="/users" className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
+                  View All
+                </Link>
+              </div>
+              <div className="flex-1 divide-y divide-slate-100 dark:divide-slate-800">
+                {loading ? (
+                  [1, 2, 3, 4, 5].map(i => <div key={i} className="p-4"><SkeletonLoader className="h-10 w-full" /></div>)
+                ) : recentUsers.length > 0 ? (
+                  recentUsers.map((u) => (
+                    <div key={u._id} className="flex items-center gap-3 p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                        {u.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{u.email}</p>
+                        <p className="text-xs capitalize text-slate-500 dark:text-slate-400">{u.role}</p>
+                      </div>
+                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex h-40 items-center justify-center text-slate-400">
+                    No recent users found.
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <Link
+                  to="/users"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-900 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                >
+                  Manage All Users
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

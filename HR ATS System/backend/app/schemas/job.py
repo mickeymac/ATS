@@ -15,6 +15,9 @@ class ApplicationStatus(str, Enum):
 class JobBase(BaseModel):
     title: str
     description: str
+    location: Optional[str] = None
+    type: Optional[str] = None
+    salary: Optional[str] = None
     required_skills: List[str]
     experience_required: int # in years
 
@@ -36,8 +39,11 @@ class ApplicationCreate(ApplicationBase):
 
 class ApplicationInDB(ApplicationCreate):
     id: str = Field(alias="_id")
+    candidate_name: Optional[str] = None
+    job_title: Optional[str] = None
     rule_score: float = 0.0
     semantic_score: float = 0.0
     final_score: float = 0.0
-    status: str = "Applied"
+    score: float = 0.0
+    status: ApplicationStatus = ApplicationStatus.APPLIED
     applied_at: datetime = Field(default_factory=datetime.utcnow)

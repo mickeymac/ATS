@@ -49,7 +49,9 @@ async def register(user_in: UserCreate, db: AsyncIOMotorDatabase = Depends(get_d
     # Let's fix security.py AFTER this tool call.
     
     access_token = create_access_token(
-        subject=user_in.email, expires_delta=access_token_expires
+        subject=user_in.email,
+        expires_delta=access_token_expires,
+        additional_claims={"role": user_in.role.value},
     )
     
     # Wait, if I don't put role in token, `get_current_user` will fail to extract it?

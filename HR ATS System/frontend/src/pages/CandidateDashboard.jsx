@@ -1,175 +1,149 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { LogOut, Upload } from 'lucide-react';
+import { AppShell } from '../components/AppShell';
+import { PageHeader } from '../components/PageHeader';
+import { StatCard } from '../components/StatCard';
+import { StatusBadge } from '../components/StatusBadge';
+import { useToast } from '../context/ToastContext';
+import { Briefcase, Send, CheckCircle, Clock, ArrowRight, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+
+const SkeletonLoader = ({ className }) => <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-md ${className}`} />;
 
 const CandidateDashboard = () => {
-  const [jobs, setJobs] = useState([]);
-  const [myApplications, setMyApplications] = useState([]);
-  const { logout, user } = useAuth();
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [resumeFile, setResumeFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [stats, setStats] = useState({ totalApplied: 0, shortlisted: 0, pending: 0, activeJobs: 0 });
+  const [recentApps, setRecentApps] = useState([]);
+  const [recommendedJobs, setRecommendedJobs] = useState([]);
+  const { addToast } = useToast();
+  const [loading, setLoading] = useState(true);
+
+  const fetchCandidateData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [appsRes, jobsRes] = await Promise.all([
+        api.get('/applications/my-applications'),
+        api.get('/jobs/')
+      ]);
+
+      const apps = appsRes.data;
+      const jobs = jobsRes.data;
+
+      const pendingStatuses = new Set(['Applied', 'Under Review']);
+
+      setStats({
+        totalApplied: apps.length,
+        shortlisted: apps.filter(a => a.status === 'Shortlisted').length,
+        pending: apps.filter(a => pendingStatuses.has(a.status)).length,
+        activeJobs: jobs.length
+      });
+
+      setRecentApps(apps.sort((a, b) => new Date(b.applied_at) - new Date(a.applied_at)).slice(0, 3));
+      setRecommendedJobs(jobs.slice(0, 3)); // Simple recommendation for now
+
+    } catch (error) {
+      addToast("Failed to load dashboard.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
 
   useEffect(() => {
-    fetchJobs();
-    fetchMyApplications();
-  }, []);
-
-  const fetchJobs = async () => {
-    try {
-      const response = await api.get('/jobs/');
-      setJobs(response.data);
-    } catch (error) {
-      console.error("Error fetching jobs", error);
-    }
-  };
-
-  const fetchMyApplications = async () => {
-    try {
-      const response = await api.get('/applications/my-applications');
-      setMyApplications(response.data);
-    } catch (error) {
-      console.error("Error fetching applications", error);
-    }
-  };
-
-  const handleApply = async (e) => {
-    e.preventDefault();
-    if (!resumeFile || !selectedJob) return;
-
-    const formData = new FormData();
-    formData.append('job_id', selectedJob._id);
-    formData.append('file', resumeFile);
-
-    setUploading(true);
-    try {
-      await api.post('/applications/apply', formData);
-      setSelectedJob(null);
-      setResumeFile(null);
-      fetchMyApplications();
-      alert('Application submitted successfully!');
-    } catch (error) {
-      console.error("Error applying", error);
-      const msg = error?.response?.data?.detail || 'Failed to apply. You might have already applied or the file format is unsupported.';
-      alert(msg);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const hasApplied = (jobId) => {
-    return myApplications.some(app => app.job_id === jobId);
-  };
+    fetchCandidateData();
+  }, [fetchCandidateData]);
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-800">Candidate Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Welcome, {user.email}</span>
-            <button onClick={logout} className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
-            <LogOut size={18} /> Logout
-            </button>
-        </div>
-      </div>
+    <AppShell>
+      <PageHeader
+        title="Candidate Dashboard"
+        description="Track your applications and discover new opportunities."
+        actions={
+          <Link
+            to="/jobs"
+            className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+          >
+            <Search size={16} />
+            Browse Jobs
+          </Link>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Available Jobs */}
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="text-xl font-semibold mb-4">Open Positions</h2>
-          <div className="space-y-4">
-            {jobs.map(job => (
-              <div key={job._id} className="p-4 border rounded hover:shadow-md transition">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-lg">{job.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{job.description}</p>
-                    <div className="flex gap-2 text-xs text-gray-500">
-                      <span className="bg-gray-100 px-2 py-1 rounded">Exp: {job.experience_required}y</span>
-                      <span className="bg-gray-100 px-2 py-1 rounded">Skills: {job.required_skills.join(', ')}</span>
-                    </div>
-                  </div>
-                  {hasApplied(job._id) ? (
-                    <span className="text-green-600 font-bold text-sm px-3 py-1 bg-green-50 rounded">Applied</span>
-                  ) : (
-                    <button 
-                      onClick={() => setSelectedJob(job)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
-                    >
-                      Apply
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="space-y-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="Applications Sent" value={loading ? '...' : stats.totalApplied} icon={Send} />
+          <StatCard title="Shortlisted" value={loading ? '...' : stats.shortlisted} icon={CheckCircle} color="green" />
+          <StatCard title="Pending Review" value={loading ? '...' : stats.pending} icon={Clock} color="amber" />
+          <StatCard title="Available Jobs" value={loading ? '...' : stats.activeJobs} icon={Briefcase} color="blue" />
         </div>
 
-        {/* My Applications */}
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="text-xl font-semibold mb-4">My Applications</h2>
-          <div className="space-y-4">
-            {myApplications.length === 0 ? (
-                <p className="text-gray-500">No applications yet.</p>
-            ) : (
-                myApplications.map(app => (
-                <div key={app._id} className="p-4 border rounded flex justify-between items-center">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Recent Applications */}
+          <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Your Applications</h3>
+              <Link to="/applications" className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
+                View All
+              </Link>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
+                [1, 2, 3].map(i => <div key={i} className="p-4"><SkeletonLoader className="h-12 w-full" /></div>)
+              ) : recentApps.length > 0 ? (
+                recentApps.map((app) => (
+                  <div key={app._id} className="flex items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <div>
-                    <p className="font-bold">Job ID: {app.job_id}</p>
-                    <p className="text-xs text-gray-500">Applied: {new Date(app.applied_at).toLocaleDateString()}</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{app.job_title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Applied on {new Date(app.applied_at).toLocaleDateString()}</p>
                     </div>
-                    <div className="text-right">
-                    <span className={`px-3 py-1 rounded text-sm font-bold ${
-                        app.status === 'Selected' ? 'bg-green-100 text-green-800' :
-                        app.status === 'Rejected' ? 'bg-red-100 text-red-800' :
-                        'bg-yellow-100 text-yellow-800'
-                    }`}>
-                        {app.status}
-                    </span>
-                    <p className="text-xs text-blue-600 mt-1">Match: {app.final_score}%</p>
-                    </div>
-                </div>
+                    <StatusBadge status={app.status} />
+                  </div>
                 ))
-            )}
+              ) : (
+                <div className="flex h-40 flex-col items-center justify-center space-y-2 text-slate-400">
+                  <p>You haven't applied to any jobs yet.</p>
+                  <Link to="/jobs" className="text-sm font-medium text-slate-900 underline dark:text-slate-100">Find your first job</Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recommended Jobs */}
+          <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Recommended for You</h3>
+              <Link to="/jobs" className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
+                Browse All
+              </Link>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
+                [1, 2, 3].map(i => <div key={i} className="p-4"><SkeletonLoader className="h-12 w-full" /></div>)
+              ) : recommendedJobs.length > 0 ? (
+                recommendedJobs.map((job) => (
+                  <div key={job._id} className="group flex items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{job.title}</p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{job.location} • {job.type}</p>
+                    </div>
+                    <Link
+                      to="/jobs"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 opacity-0 transition-all group-hover:opacity-100 dark:bg-slate-800 dark:text-slate-400"
+                    >
+                      <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                ))
+              ) : (
+                <div className="flex h-40 items-center justify-center text-slate-400">
+                  No job recommendations yet.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Apply Modal */}
-      {selectedJob && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded w-96">
-            <h2 className="text-xl font-bold mb-4">Apply for {selectedJob.title}</h2>
-            <form onSubmit={handleApply}>
-              <div className="border-2 border-dashed border-gray-300 p-6 rounded text-center mb-4 cursor-pointer hover:bg-gray-50">
-                <input 
-                  type="file" 
-                  accept=".pdf,.docx"
-                  onChange={(e) => setResumeFile(e.target.files[0])}
-                  className="w-full"
-                  required
-                />
-                <p className="text-sm text-gray-500 mt-2">Upload Resume (PDF/DOCX)</p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => {setSelectedJob(null); setResumeFile(null);}} className="px-4 py-2 text-gray-600">Cancel</button>
-                <button 
-                  type="submit" 
-                  disabled={uploading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-blue-300 flex items-center gap-2"
-                >
-                  {uploading ? 'Analyzing...' : <><Upload size={16} /> Submit Application</>}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </AppShell>
   );
 };
 
