@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
-from app.core.deps import check_role, get_db
-from app.schemas.user import UserInDB, UserCreate, UserRole
+from app.core.deps import check_role, get_db, get_current_active_user
+from app.schemas.user import UserInDB, UserCreate, UserRole, UserUpdate
 from app.core.security import get_password_hash
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
@@ -44,6 +44,50 @@ async def create_user(
     result = await db.users.insert_one(user_doc)
     user_doc["_id"] = str(result.inserted_id)
     return UserInDB(**user_doc)
+
+@router.get("/me", response_model=UserInDB)
+async def read_current_user(
+    current_user: UserInDB = Depends(get_current_active_user)
+):
+    return current_user
+
+@router.put("/me", response_model=UserInDB)
+async def update_current_user(
+    user_update: UserUpdate,
+    current_user: UserInDB = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    if current_user.id == "admin-static":
+        raise HTTPException(status_code=400, detail="Admin profile cannot be updated")
+
+    update_doc = {}
+    if user_update.name is not None:
+        update_doc["name"] = user_update.name
+    if user_update.password:
+        update_doc["password_hash"] = get_password_hash(user_update.password)
+
+    if not update_doc:
+        return current_user
+
+    await db.users.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": update_doc}
+    )
+
+    updated_user = await db.users.find_one({"_id": ObjectId(current_user.id)})
+    updated_user["_id"] = str(updated_user["_id"])
+    return UserInDB(**updated_user)
+
+@router.delete("/me")
+async def delete_current_user(
+    current_user: UserInDB = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    if current_user.id == "admin-static":
+        raise HTTPException(status_code=400, detail="Admin account cannot be deleted")
+
+    await db.users.delete_one({"_id": ObjectId(current_user.id)})
+    return {"message": "Account deleted successfully"}
 
 @router.delete("/{user_id}")
 async def delete_user(

@@ -27,6 +27,7 @@ const Applications = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -58,6 +59,10 @@ const Applications = () => {
     } catch (error) {
       addToast('Failed to update status.', 'error');
     }
+  };
+
+  const openDetails = (app) => {
+    setSelectedApplication(app);
   };
 
   const filteredApplications = applications.filter(app => {
@@ -191,7 +196,10 @@ const Applications = () => {
                               </button>
                             </>
                           ) : (
-                            <button className="text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+                            <button
+                              onClick={() => openDetails(app)}
+                              className="text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                            >
                               View Details
                             </button>
                           )}
@@ -214,6 +222,46 @@ const Applications = () => {
           </div>
         </div>
       </div>
+
+      {selectedApplication && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Application Details</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{selectedApplication.job_title}</p>
+            </div>
+            <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Status</span>
+                <StatusBadge status={selectedApplication.status} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Applied</span>
+                <span>{new Date(selectedApplication.applied_at).toLocaleDateString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">AI Score</span>
+                <span>{(selectedApplication.score ?? selectedApplication.final_score ?? 0).toFixed(1)}%</span>
+              </div>
+              {selectedApplication.candidate_name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Candidate</span>
+                  <span>{selectedApplication.candidate_name}</span>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedApplication(null)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 };
