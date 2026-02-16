@@ -3,8 +3,8 @@ from typing import List, Optional
 from app.core.deps import get_current_active_user, check_role, get_db
 from app.schemas.job import ApplicationCreate, ApplicationInDB, ApplicationStatus
 from app.schemas.user import UserInDB, UserRole
-from app.services.resume_parser import extract_text_from_file
-from app.services.ai_scoring import evaluate_application
+from app.services.resume_extractor import extract_text_from_bytes, extract_candidate_info
+from app.services.scoring_engine import evaluate_application_v2
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
@@ -68,23 +68,54 @@ async def apply_for_job(
     file_name = f"{uuid.uuid4()}.{file_ext}"
     file_path = os.path.join(UPLOAD_DIR, file_name)
     
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await file.read() # Read once
-        await out_file.write(content)
-        file.seek(0) # Reset for parsing
+    # Read file content ONCE
+    file_content = await file.read()
     
-    # Extract text (graceful fallback)
+    # Save file to disk
+    async with aiofiles.open(file_path, 'wb') as out_file:
+        await out_file.write(file_content)
+    
+    # Extract text and parsed data using the already-read bytes
+    extracted_text = ""
+    parsed_candidate_data = {}
+    
     try:
-        extracted_text = await extract_text_from_file(file)
-    except Exception:
+        # Use extract_text_from_bytes with the content we already have
+        extracted_text = extract_text_from_bytes(file_content, file.filename)
+        parsed_candidate_data = extract_candidate_info(extracted_text)
+        print(f"✓ Successfully extracted {len(extracted_text)} chars from {file.filename}")
+        print(f"✓ Parsed data: name={parsed_candidate_data.get('name')}, skills={len(parsed_candidate_data.get('skills', []))}")
+    except Exception as e:
+        import traceback
+        print(f"✗ Resume extraction error: {e}")
+        traceback.print_exc()
         extracted_text = ""
-        
-    # AI Scoring
-    scores = await evaluate_application(
-        extracted_text, 
-        job.get("description", ""), 
-        job.get("required_skills", [])
-    )
+        parsed_candidate_data = {}
+    
+    # Production scoring v2
+    try:
+        scoring_result = await evaluate_application_v2(
+            parsed_candidate_data, 
+            extracted_text, 
+            job
+        )
+    except Exception as e:
+        import traceback
+        print(f"Scoring error: {e}")
+        traceback.print_exc()
+        scoring_result = {
+            "skill_score": 0.0,
+            "experience_score": 0.0,
+            "education_score": 0.0,
+            "semantic_score": 0.0,
+            "final_score": 0.0,
+            "matched_skills": [],
+            "missing_skills": [],
+            "skill_coverage": 0.0,
+            "experience_match": 0.0,
+            "semantic_similarity": 0.0,
+            "breakdown": {}
+        }
     
     application_doc = {
         "job_id": job_id,
@@ -93,10 +124,10 @@ async def apply_for_job(
         "job_title": job.get("title"),
         "resume_file_path": file_path,
         "extracted_text": extracted_text,
-        "rule_score": scores["rule_score"],
-        "semantic_score": scores["semantic_score"],
-        "final_score": scores["final_score"],
-        "score": scores["final_score"],
+        "parsed_data": parsed_candidate_data,  # NEW: Structured candidate data
+        "scoring": scoring_result,  # NEW: Full scoring breakdown
+        "score": scoring_result.get("final_score", 0.0),  # For backward compatibility
+        "final_score": scoring_result.get("final_score", 0.0),  # For backward compatibility
         "status": ApplicationStatus.APPLIED.value,
         "applied_at": datetime.utcnow()
     }

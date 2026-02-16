@@ -1,0 +1,20 @@
+
+John Doe
+john@example.com
+(555) 123-4567
+https://linkedin.com/in/johndoe
+https://github.com/johndoe
+
+Skills: Python, FastAPI, MongoDB, Docker, AWS, React, PostgreSQL
+
+Experience:
+5 years as Software Engineer at Tech Company
+Building REST APIs with FastAPI
+
+Education:
+Bachelor of Science in Computer Science
+State University, 2019
+
+Projects:
+AI Resume Parser - Built a PDF parser with OCR fallback
+HR ATS System - Implemented scoring engine
