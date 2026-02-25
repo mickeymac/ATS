@@ -1,7 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
-const ChartCard = ({ title, description, children }) => {
+const ChartCard = ({ title, description, children, height = 'h-64' }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -21,7 +21,7 @@ const ChartCard = ({ title, description, children }) => {
           )}
         </div>
       </div>
-      <div className="h-64">
+      <div className={`${height} min-h-[200px]`}>
         {children}
       </div>
     </motion.div>

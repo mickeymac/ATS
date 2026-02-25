@@ -1,14 +1,18 @@
 """
 Production-grade resume text extraction with OCR fallback.
 Extracts and normalizes resume text from PDF/DOCX files.
+Uses LLM for intelligent data extraction with regex fallback.
 """
 
 import io
 import re
+import logging
 import pdfplumber
 import docx
 from fastapi import UploadFile
-from typing import Tuple
+from typing import Tuple, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from pdf2image import convert_from_bytes
@@ -142,18 +146,18 @@ def _normalize_text(text: str) -> str:
     - Preserve emails and URLs
     """
     # Preserve emails and URLs by replacing them temporarily
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{1,}\b'
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     url_pattern = r'https?://[^\s]+'
     
     emails = re.findall(email_pattern, text)
     urls = re.findall(url_pattern, text)
     
-    # Replace with placeholders
+    # Replace with placeholders (lowercase to survive lowercasing)
     text_with_placeholders = text
     for i, email in enumerate(emails):
-        text_with_placeholders = text_with_placeholders.replace(email, f"__EMAIL_{i}__")
+        text_with_placeholders = text_with_placeholders.replace(email, f"__email_{i}__")
     for i, url in enumerate(urls):
-        text_with_placeholders = text_with_placeholders.replace(url, f"__URL_{i}__")
+        text_with_placeholders = text_with_placeholders.replace(url, f"__url_{i}__")
     
     # Normalize
     text_with_placeholders = text_with_placeholders.lower()
@@ -161,9 +165,9 @@ def _normalize_text(text: str) -> str:
     
     # Restore emails and URLs
     for i, email in enumerate(emails):
-        text_with_placeholders = text_with_placeholders.replace(f"__EMAIL_{i}__", email)
+        text_with_placeholders = text_with_placeholders.replace(f"__email_{i}__", email)
     for i, url in enumerate(urls):
-        text_with_placeholders = text_with_placeholders.replace(f"__URL_{i}__", url)
+        text_with_placeholders = text_with_placeholders.replace(f"__url_{i}__", url)
     
     return text_with_placeholders.strip()
 
@@ -171,10 +175,35 @@ def _normalize_text(text: str) -> str:
 def extract_candidate_info(resume_text: str) -> dict:
     """
     Extract structured candidate information from resume text.
+    Uses LLM as primary method with regex fallback.
+    
     Returns: {
-        name, email, phone, linkedin_url, github_url,
-        skills, experience_years, education, projects
+        name, email, phone, linkedin_url, github_url, portfolio_url,
+        skills, experience_years, education, projects, certifications,
+        summary, extraction_method
     }
+    """
+    # Try LLM extraction first
+    try:
+        from app.services.llm_extractor import LLMResumeExtractor
+        
+        llm_extractor = LLMResumeExtractor()
+        extracted_data = llm_extractor.extract_resume_data(resume_text)
+        
+        # Add extraction method for debugging
+        extracted_data["extraction_method"] = "llm" if extracted_data.get("name") != "Unknown" else "regex"
+        
+        logger.info(f"Resume extraction completed using: {extracted_data['extraction_method']}")
+        return extracted_data
+        
+    except Exception as e:
+        logger.warning(f"LLM extraction failed, using regex fallback: {e}")
+        return _extract_candidate_info_regex(resume_text)
+
+
+def _extract_candidate_info_regex(resume_text: str) -> dict:
+    """
+    Fallback regex-based extraction of candidate information.
     """
     info = {
         "name": None,
@@ -184,51 +213,85 @@ def extract_candidate_info(resume_text: str) -> dict:
         "github_url": None,
         "skills": [],
         "experience_years": 0,
+        "experience_months": 0,
         "education": [],
-        "projects": []
+        "certifications": [],
+        "summary": None,
+        "extraction_method": "regex"
     }
     
     text = resume_text.lower()
+    original_text = resume_text
     
-    # Email extraction
-    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{1,}\b', resume_text)
-    if email_match:
-        info["email"] = email_match.group()
+    # Email extraction - improved pattern to handle more formats
+    email_patterns = [
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',  # Standard email
+        r'\b[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',  # With spaces around @
+        r'\b[A-Za-z0-9._%+-]+\s*\[\s*at\s*\]\s*[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',  # [at] format
+    ]
     
-    # Name extraction - often at the very start before contact info or special characters
-    # Try multiple approaches since text might be single-line after normalization
+    for pattern in email_patterns:
+        email_match = re.search(pattern, original_text, re.IGNORECASE)
+        if email_match:
+            email = email_match.group().replace(' ', '').replace('[at]', '@')
+            info["email"] = email
+            break
     
-    # Approach 1: Extract from beginning before special characters
-    name_text = resume_text
-    # Remove content after common separators
-    for separator in [' + ', ' # ', ' email ', ' phone ']:
-        if separator.lower() in name_text.lower():
-            name_text = name_text.split(separator, 1)[0]
+    # Name extraction - improved to handle various formats
+    # Strategy 1: First extract text before special characters/contact info
+    name_text = original_text
     
-    # Check if beginning looks like a name (short, mostly words)
-    first_part = name_text.strip()
-    words = first_part.split()
+    # Common separators in resumes that come after name
+    separators = [
+        r'\s*\+\s*',  # + symbol
+        r'\s*#\s*',   # # symbol
+        r'\s*\|\s*',  # | symbol
+        r'\s*•\s*',   # bullet
+        r'\s*@\s*',   # @ for email
+        r'linkedin',
+        r'github',
+        r'\d{10}',    # phone number
+        r'\+\d{1,3}[-\s]?\d',  # international phone
+    ]
     
-    if words and 1 <= len(words) <= 4:
-        # Check if it's likely a name (no numbers, no special chars in first part)
-        first_words = ' '.join(words[:4])
-        if not any(char.isdigit() for char in first_words) and first_words:
-            info["name"] = first_words
+    for sep in separators:
+        match = re.search(sep, name_text, re.IGNORECASE)
+        if match:
+            name_text = name_text[:match.start()].strip()
+            break
     
-    # Approach 2: If name still not found, check first few lines
+    # Clean up the extracted name
+    name_text = name_text.strip()
+    
+    # Check if it's a valid name (2-5 words, mostly letters, no special chars)
+    if name_text:
+        words = name_text.split()
+        if 1 <= len(words) <= 5:
+            # Verify it looks like a name
+            name_candidate = ' '.join(words[:5])
+            # Remove any remaining special characters
+            name_candidate = re.sub(r'[^\w\s]', '', name_candidate).strip()
+            
+            if name_candidate and len(name_candidate) >= 3:
+                # Check letter ratio
+                letter_count = sum(1 for c in name_candidate if c.isalpha() or c.isspace())
+                if letter_count / len(name_candidate) > 0.8:
+                    # Title case the name
+                    info["name"] = name_candidate.title()
+    
+    # Strategy 2: If name not found, try newline-based extraction
     if not info["name"]:
-        lines = resume_text.split('\n')
+        lines = original_text.split('\n')
         for line in lines[:5]:
             line_clean = line.strip()
-            # Name should be relatively short, mostly letters
             if (line_clean and 
                 3 <= len(line_clean) <= 50 and 
-                2 <= len(line_clean.split()) <= 5 and
-                not any(keyword in line_clean.lower() for keyword in ['email', 'phone', 'linkedin', 'github', 'http', ':', '@', '#'])):
+                1 <= len(line_clean.split()) <= 5 and
+                not any(keyword in line_clean.lower() for keyword in ['email', 'phone', 'linkedin', 'github', 'http', ':', '@', '#', '+'])):
                 
-                letter_ratio = sum(1 for c in line_clean if c.isalpha()) / len(line_clean)
+                letter_ratio = sum(1 for c in line_clean if c.isalpha() or c.isspace()) / len(line_clean)
                 if letter_ratio > 0.7:
-                    info["name"] = line_clean
+                    info["name"] = line_clean.title()
                     break
     
     # Phone extraction (common patterns)
@@ -246,12 +309,12 @@ def extract_candidate_info(resume_text: str) -> dict:
     # LinkedIn URL extraction
     linkedin_match = re.search(r'linkedin\.com/in/[^\s]+', text)
     if linkedin_match:
-        info["linkedin_url"] = linkedin_match.group()
+        info["linkedin_url"] = "https://" + linkedin_match.group()
     
     # GitHub URL extraction
     github_match = re.search(r'github\.com/[^\s]+', text)
     if github_match:
-        info["github_url"] = github_match.group()
+        info["github_url"] = "https://" + github_match.group()
     
     # Years of experience extraction
     # First try explicit "X years" patterns
@@ -261,87 +324,115 @@ def extract_candidate_info(resume_text: str) -> dict:
         r'total\s+(?:experience|exp)[:\s]+(\d+)',
     ]
     
-    experience_years = 0
+    experience_years = 0.0
+    total_experience_months = 0
+    
     for pattern in years_patterns:
         matches = re.findall(pattern, text)
         if matches:
             years_found = [int(m) for m in matches if m.strip()]
             if years_found:
                 experience_years = max(years_found)
+                total_experience_months = int(experience_years * 12)
                 break
     
     # If no explicit years found, try to calculate from date ranges
-    # Handles both "May 2024 – Sep 2024" and "may2024–sep2024" (after normalization)
     if experience_years == 0:
         from datetime import datetime
         
-        # Pattern to find date ranges: month+year patterns with separators
-        # Matches: may2024–sep2024, may2024 - sep2024, May 2024 – Sep 2024, etc.
-        date_range_pattern = r'([a-z]{3})\s*(\d{4})\s*[–\-–—]\s*([a-z]{3}|present|current)\s*(\d{4})?'
-        date_matches = re.findall(date_range_pattern, text, re.IGNORECASE)
+        # Multiple date range patterns
+        date_range_patterns = [
+            r'([a-z]{3,9})\s*[\'"]?(\d{4})\s*[–\-–—to]+\s*([a-z]{3,9}|present|current|now)\s*[\'"]?(\d{4})?',
+            r'(\d{2})/(\d{4})\s*[–\-–—to]+\s*(\d{2}|present|current)/(\d{4})?',
+        ]
         
-        if date_matches:
-            months = {
-                'jan':1, 'feb':2, 'mar':3, 'apr':4, 'may':5, 'jun':6,
-                'jul':7, 'aug':8, 'sep':9, 'oct':10, 'nov':11, 'dec':12
-            }
-            total_months = 0
-            current_dt = datetime.now()
+        months = {
+            'jan': 1, 'january': 1,
+            'feb': 2, 'february': 2,
+            'mar': 3, 'march': 3,
+            'apr': 4, 'april': 4,
+            'may': 5,
+            'jun': 6, 'june': 6,
+            'jul': 7, 'july': 7,
+            'aug': 8, 'august': 8,
+            'sep': 9, 'sept': 9, 'september': 9,
+            'oct': 10, 'october': 10,
+            'nov': 11, 'november': 11,
+            'dec': 12, 'december': 12
+        }
+        
+        current_dt = datetime.now()
+        total_months = 0
+        
+        for pattern in date_range_patterns:
+            date_matches = re.findall(pattern, text, re.IGNORECASE)
             
-            for start_month, start_year, end_month, end_year in date_matches:
-                start_month_lower = start_month.lower()[:3]
-                end_month_lower = end_month.lower()[:3]
-                start_year = int(start_year)
-                
-                if start_month_lower in months:
-                    try:
-                        if end_month_lower in months:
-                            # Normal date range with explicit end year
-                            end_year = int(end_year) if end_year else start_year
-                            # If end month < start month, likely next year
-                            if months[end_month_lower] < months[start_month_lower]:
-                                end_year += 1
-                            
-                            # Calculate months between dates
-                            calc_months = (end_year - start_year) * 12 + (months[end_month_lower] - months[start_month_lower])
-                        else:
-                            # Open-ended (present/current)
-                            calc_months = (current_dt.year - start_year) * 12 + (current_dt.month - months[start_month_lower])
-                        
-                        if calc_months >= 0:
+            for match in date_matches:
+                try:
+                    start_month_str = match[0].lower()[:3]
+                    start_year = int(match[1])
+                    end_month_str = match[2].lower()[:3] if match[2] else ''
+                    end_year = int(match[3]) if match[3] and match[3].isdigit() else None
+                    
+                    # Get start month
+                    start_month = months.get(start_month_str, 1)
+                    
+                    # Handle "present" or current date
+                    if end_month_str in ['pre', 'cur', 'now'] or not end_month_str:
+                        end_year = current_dt.year
+                        end_month = current_dt.month
+                    else:
+                        end_month = months.get(end_month_str, 12)
+                        if not end_year:
+                            end_year = start_year
+                    
+                    # Calculate months
+                    if start_year and end_year:
+                        calc_months = (end_year - start_year) * 12 + (end_month - start_month)
+                        if 0 < calc_months < 240:  # Max 20 years
                             total_months += calc_months
-                    except (ValueError, KeyError):
-                        continue
-            
-            # Convert months to years
-            if total_months > 0:
-                # Round to nearest 0.1 (1 month = 0.08 years approximately)
-                experience_years = round(total_months / 12, 1)
-                # For very short internships, at least show 0.5 years if there's any duration
-                if experience_years < 0.5 and total_months > 0:
-                    experience_years = round(total_months / 12, 2)
+                except (ValueError, TypeError, IndexError):
+                    continue
+        
+        if total_months > 0:
+            total_experience_months = total_months
+            experience_years = round(total_months / 12, 2)
     
     info["experience_years"] = experience_years
+    info["experience_months"] = total_experience_months
     
-    # Education degree extraction (prefer full names over abbreviations)
-    # Full degree names mapped to their usual abbreviations
-    degree_mapping = {
-        'bachelor': ['bachelor', 'baccalaureate', 'b.a.', 'ba', 'b.s.', 'bs', 'b.tech', 'btech'],
-        'master': ['master', 'masters', 'm.a.', 'ma', 'm.s.', 'ms', 'm.tech', 'mtech', 'mca', 'mba'],
-        'phd': ['phd', 'ph.d.', 'doctorate', 'doctoral'],
-        'diploma': ['diploma', 'associate'],
-    }
+    # Education degree extraction - extract EXACT degree names from resume
+    # Map patterns to actual degree names found in text
+    education_patterns = [
+        # Full degree names with field
+        (r'\b(master\s+of\s+computer\s+application|mca)\b', 'MCA (Master of Computer Application)'),
+        (r'\b(bachelor\s+of\s+computer\s+application|bca)\b', 'BCA (Bachelor of Computer Application)'),
+        (r'\b(m\.?tech|master\s+of\s+technology)\b', 'M.Tech'),
+        (r'\b(b\.?tech|bachelor\s+of\s+technology)\b', 'B.Tech'),
+        (r'\b(m\.?sc|master\s+of\s+science)\b', 'M.Sc'),
+        (r'\b(b\.?sc|bachelor\s+of\s+science)\b', 'B.Sc'),
+        (r'\b(mba|master\s+of\s+business\s+administration)\b', 'MBA'),
+        (r'\b(b\.?e\.?|bachelor\s+of\s+engineering)\b', 'B.E.'),
+        (r'\b(m\.?e\.?|master\s+of\s+engineering)\b', 'M.E.'),
+        (r'\b(ph\.?d\.?|doctorate|doctoral)\b', 'Ph.D.'),
+        (r'\b(b\.?a\.?|bachelor\s+of\s+arts)\b', 'B.A.'),
+        (r'\b(m\.?a\.?|master\s+of\s+arts)\b', 'M.A.'),
+        (r'\b(b\.?com|bachelor\s+of\s+commerce)\b', 'B.Com'),
+        (r'\b(m\.?com|master\s+of\s+commerce)\b', 'M.Com'),
+        (r'\bhsc\b', 'HSC (Higher Secondary)'),
+        (r'\bssc\b', 'SSC (Secondary School)'),
+        (r'\b(diploma|associate)\b', 'Diploma'),
+    ]
     
-    education_found = set()
-    for full_name, abbreviations in degree_mapping.items():
-        for keyword in [full_name] + abbreviations:
-            if keyword in text:
-                education_found.add(full_name.title())
-                break  # Only count the full name once
+    education_found = []
+    for pattern, degree_name in education_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            if degree_name not in education_found:
+                education_found.append(degree_name)
     
-    info["education"] = list(education_found)
+    info["education"] = education_found
     
-    # Skills extraction (look for skill-like words)
+    # Skills extraction
     skill_keywords = [
         'python', 'javascript', 'java', 'c++', 'c#', 'rust', 'go', 'kotlin', 'swift',
         'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'fastapi',
@@ -357,4 +448,49 @@ def extract_candidate_info(resume_text: str) -> dict:
             info["skills"].append(skill.title())
     info["skills"] = list(set(info["skills"]))
     
+    # Clean the name if extracted
+    if info["name"]:
+        info["name"] = _clean_extracted_name(info["name"])
+    
     return info
+
+
+def _clean_extracted_name(name: str) -> str:
+    """Clean extracted name - remove address, symbols, etc."""
+    if not name or name == "Unknown":
+        return "Unknown"
+    
+    # Stop at common separators
+    separators = ['+', '#', '|', '@', '(', ')', ',', ':', ';']
+    for sep in separators:
+        if sep in name:
+            name = name.split(sep)[0]
+    
+    # Remove numbers (likely address or phone)
+    name = re.sub(r'\d+', '', name)
+    
+    # Remove extra whitespace and clean
+    name = re.sub(r'\s+', ' ', name).strip()
+    
+    # Remove common non-name words
+    non_name_words = ['l-', 'apt', 'street', 'road', 'nagar', 'vadodara', 'india', 'address', 'taif']
+    name_lower = name.lower()
+    for word in non_name_words:
+        if word in name_lower:
+            idx = name_lower.find(word)
+            name = name[:idx].strip()
+            name_lower = name.lower()
+    
+    # Ensure it looks like a name (mostly letters)
+    if name:
+        letter_count = sum(1 for c in name if c.isalpha() or c.isspace())
+        if len(name) > 0 and letter_count / len(name) < 0.8:
+            return "Unknown"
+    
+    # Title case and limit to reasonable length
+    name = name.strip().title()
+    words = name.split()
+    if len(words) > 5:
+        name = ' '.join(words[:5])
+    
+    return name if len(name) >= 2 else "Unknown"

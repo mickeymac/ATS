@@ -29,12 +29,6 @@ async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
     if "score" not in app:
         app["score"] = app.get("final_score", 0.0)
 
-    candidate_id = app.get("candidate_id")
-    if not app.get("candidate_name") and candidate_id and ObjectId.is_valid(candidate_id):
-        user = await db.users.find_one({"_id": ObjectId(candidate_id)})
-        if user:
-            app["candidate_name"] = user.get("name")
-
     job_id = app.get("job_id")
     if not app.get("job_title") and job_id and ObjectId.is_valid(job_id):
         job = await db.jobs.find_one({"_id": ObjectId(job_id)})
@@ -43,25 +37,18 @@ async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
 
     return app
 
-@router.post("/apply", response_model=ApplicationInDB)
-async def apply_for_job(
+@router.post("/upload", response_model=ApplicationInDB)
+async def upload_resume(
     job_id: str = Form(...),
     file: UploadFile = File(...),
-    current_user: UserInDB = Depends(check_role([UserRole.CANDIDATE])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
+    """HR/Admin uploads a resume for a job posting."""
     # Check if job exists
     job = await db.jobs.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-        
-    # Check if already applied
-    existing_application = await db.applications.find_one({
-        "job_id": job_id,
-        "candidate_id": current_user.id
-    })
-    if existing_application:
-        raise HTTPException(status_code=400, detail="You have already applied for this job")
 
     # Save file
     file_ext = file.filename.split(".")[-1]
@@ -112,22 +99,55 @@ async def apply_for_job(
             "matched_skills": [],
             "missing_skills": [],
             "skill_coverage": 0.0,
-            "experience_match": 0.0,
-            "semantic_similarity": 0.0,
             "breakdown": {}
         }
     
     application_doc = {
         "job_id": job_id,
-        "candidate_id": current_user.id,
-        "candidate_name": current_user.name,
+        "uploaded_by": current_user.id,  # HR/Admin who uploaded the resume
         "job_title": job.get("title"),
         "resume_file_path": file_path,
         "extracted_text": extracted_text,
-        "parsed_data": parsed_candidate_data,  # NEW: Structured candidate data
-        "scoring": scoring_result,  # NEW: Full scoring breakdown
-        "score": scoring_result.get("final_score", 0.0),  # For backward compatibility
-        "final_score": scoring_result.get("final_score", 0.0),  # For backward compatibility
+        
+        # Scores (raw 0-100 scale)
+        "skill_score": scoring_result.get("skill_score", 0.0),
+        "experience_score": scoring_result.get("experience_score", 0.0),
+        "education_score": scoring_result.get("education_score", 0.0),
+        "semantic_score": scoring_result.get("semantic_score", 0.0),
+        "final_score": scoring_result.get("final_score", 0.0),
+        
+        # Score display format (showing contribution out of max weight)
+        # Weights: skill=35%, experience=25%, education=10%, semantic=30%
+        "score_display": {
+            "skill": f"{round(scoring_result.get('skill_score', 0.0) * 0.35, 1)}/35",
+            "experience": f"{round(scoring_result.get('experience_score', 0.0) * 0.25, 1)}/25",
+            "education": f"{round(scoring_result.get('education_score', 0.0) * 0.10, 1)}/10",
+            "semantic": f"{round(scoring_result.get('semantic_score', 0.0) * 0.30, 1)}/30",
+            "total": f"{round(scoring_result.get('final_score', 0.0), 1)}/100"
+        },
+        
+        # Scoring breakdown (actual contribution values)
+        "score_breakdown": scoring_result.get("breakdown", {}),
+        
+        # Skill matching details
+        "matched_skills": scoring_result.get("matched_skills", []),
+        "missing_skills": scoring_result.get("missing_skills", []),
+        "skill_coverage": scoring_result.get("skill_coverage", 0.0),
+        
+        # Candidate extracted info (flattened for easy querying)
+        "candidate_name_extracted": parsed_candidate_data.get("name"),
+        "candidate_email": parsed_candidate_data.get("email"),
+        "candidate_phone": parsed_candidate_data.get("phone"),
+        "candidate_linkedin": parsed_candidate_data.get("linkedin_url"),
+        "candidate_github": parsed_candidate_data.get("github_url"),
+        "candidate_experience_years": parsed_candidate_data.get("experience_years", 0),
+        "candidate_experience_months": parsed_candidate_data.get("experience_months", 0),
+        "candidate_education": parsed_candidate_data.get("education", []),
+        "candidate_skills": parsed_candidate_data.get("skills", []),
+        "candidate_certifications": parsed_candidate_data.get("certifications", []),
+        "candidate_summary": parsed_candidate_data.get("summary", ""),
+        "extraction_method": parsed_candidate_data.get("extraction_method", "regex"),
+        
         "status": ApplicationStatus.APPLIED.value,
         "applied_at": datetime.utcnow()
     }
@@ -156,18 +176,6 @@ async def get_job_applications(
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     cursor = db.applications.find({"job_id": job_id})
-    apps = []
-    async for app in cursor:
-        app = await _enrich_application(app, db)
-        apps.append(ApplicationInDB(**app))
-    return apps
-
-@router.get("/my-applications", response_model=List[ApplicationInDB])
-async def get_my_applications(
-    current_user: UserInDB = Depends(check_role([UserRole.CANDIDATE])),
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    cursor = db.applications.find({"candidate_id": current_user.id})
     apps = []
     async for app in cursor:
         app = await _enrich_application(app, db)

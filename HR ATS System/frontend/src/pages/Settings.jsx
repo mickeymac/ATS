@@ -5,9 +5,20 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/api';
 import { AppShell } from '../components/AppShell';
-import { PageHeader } from '../components/PageHeader';
-import { Moon, Sun, Trash2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { 
+  Card, 
+  CardBody,
+  Button,
+  Input,
+  Switch,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure
+} from '@nextui-org/react';
+import { Moon, Sun, Trash2, Bell, Lock, Monitor, Shield, Check } from 'lucide-react';
 
 const Settings = () => {
   const { theme, toggleTheme } = useTheme();
@@ -15,291 +26,305 @@ const Settings = () => {
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showSessionsModal, setShowSessionsModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [passwordValue, setPasswordValue] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const sections = [
-    {
-      title: 'Appearance',
-      description: 'Customize how the platform looks on your device.',
-      settings: [
-        {
-          id: 'theme',
-          label: 'Interface Theme',
-          description: 'Switch between light and dark mode.',
-          action: (
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun size={14} className="text-amber-500" />
-                  <span>Light Mode</span>
-                </>
-              ) : (
-                <>
-                  <Moon size={14} className="text-indigo-500" />
-                  <span>Dark Mode</span>
-                </>
-              )}
-            </button>
-          ),
-        },
-      ],
-    },
-    {
-      title: 'Notifications',
-      description: 'Choose what updates you want to receive.',
-      settings: [
-        {
-          id: 'email-notifs',
-          label: 'Email Notifications',
-          description: 'Receive updates about new applications and job status.',
-          action: (
-            <button
-              type="button"
-              onClick={() => {
-                const nextValue = !emailNotifications;
-                setEmailNotifications(nextValue);
-                addToast(
-                  nextValue ? 'Email notifications enabled.' : 'Email notifications disabled.',
-                  'info'
-                );
-              }}
-              className={`flex h-6 w-11 items-center rounded-full p-1 transition-colors ${
-                emailNotifications ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-800'
-              }`}
-            >
-              <div
-                className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                  emailNotifications ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          ),
-        },
-      ],
-    },
-    {
-      title: 'Privacy & Security',
-      description: 'Manage your account security and data.',
-      settings: [
-        {
-          id: 'password',
-          label: 'Change Password',
-          description: 'Update your login credentials.',
-          action: (
-            <button
-              onClick={() => setShowPasswordModal(true)}
-              className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-            >
-              Update
-            </button>
-          ),
-        },
-        {
-          id: 'sessions',
-          label: 'Active Sessions',
-          description: 'Manage your active logins across devices.',
-          action: (
-            <button
-              onClick={() => setShowSessionsModal(true)}
-              className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-            >
-              View All
-            </button>
-          ),
-        },
-      ],
-    },
-    {
-      title: 'Danger Zone',
-      description: 'Permanently delete your account and all data.',
-      settings: [
-        {
-          id: 'delete-account',
-          label: 'Delete Account',
-          description: 'This action is irreversible. Please proceed with caution.',
-          action: (
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-all hover:bg-red-100 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-            >
-              <Trash2 size={14} />
-              <span>Delete</span>
-            </button>
-          ),
-        },
-      ],
+  const { 
+    isOpen: isPasswordOpen, 
+    onOpen: onPasswordOpen, 
+    onOpenChange: onPasswordOpenChange,
+    onClose: onPasswordClose 
+  } = useDisclosure();
+  
+  const { 
+    isOpen: isSessionsOpen, 
+    onOpen: onSessionsOpen, 
+    onOpenChange: onSessionsOpenChange 
+  } = useDisclosure();
+  
+  const { 
+    isOpen: isDeleteOpen, 
+    onOpen: onDeleteOpen, 
+    onOpenChange: onDeleteOpenChange,
+    onClose: onDeleteClose 
+  } = useDisclosure();
+
+  const handlePasswordUpdate = async () => {
+    if (!passwordValue) {
+      addToast('Please enter a new password.', 'error');
+      return;
     }
-  ];
+    setSavingPassword(true);
+    try {
+      await api.put('/users/me', { password: passwordValue });
+      addToast('Password updated successfully.', 'success');
+      setPasswordValue('');
+      onPasswordClose();
+    } catch (error) {
+      addToast('Failed to update password.', 'error');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await api.delete('/users/me');
+      addToast('Account deleted.', 'success');
+      logout();
+      navigate('/');
+    } catch (error) {
+      addToast('Failed to delete account.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <AppShell>
-      <PageHeader
-        title="Settings"
-        description="Manage your account settings and preferences."
-      />
+      <div className="flex flex-col gap-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-default-900">Settings</h1>
+          <p className="text-default-600">Manage your account preferences</p>
+        </div>
 
-      <div className="space-y-6">
-        {sections.map((section, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-          >
-            <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/50">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{section.title}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{section.description}</p>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {section.settings.map((setting) => (
-                <div key={setting.id} className="flex items-center justify-between p-6">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{setting.label}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{setting.description}</p>
-                  </div>
-                  {setting.action}
+        <div className="max-w-3xl space-y-6">
+          {/* Appearance Section */}
+          <Card className="border border-divider">
+            <CardBody className="p-0">
+              <div className="flex items-center gap-3 p-5 border-b border-divider">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Monitor size={20} />
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        ))}
+                <div>
+                  <h3 className="text-base font-semibold text-default-900">Appearance</h3>
+                  <p className="text-sm text-default-500">Customize your interface</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-default-900">Interface Theme</p>
+                    <p className="text-xs text-default-400">Switch between light and dark mode</p>
+                  </div>
+                  <Button
+                    variant="bordered"
+                    startContent={theme === 'dark' ? <Sun size={16} className="text-warning" /> : <Moon size={16} className="text-primary" />}
+                    onPress={toggleTheme}
+                  >
+                    {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Notifications Section */}
+          <Card className="border border-divider">
+            <CardBody className="p-0">
+              <div className="flex items-center gap-3 p-5 border-b border-divider">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/10 text-success">
+                  <Bell size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-default-900">Notifications</h3>
+                  <p className="text-sm text-default-500">Manage email preferences</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-default-900">Email Notifications</p>
+                    <p className="text-xs text-default-400">Receive updates about applications</p>
+                  </div>
+                  <Switch
+                    isSelected={emailNotifications}
+                    onValueChange={(val) => {
+                      setEmailNotifications(val);
+                      addToast(
+                        val ? 'Email notifications enabled.' : 'Email notifications disabled.',
+                        'info'
+                      );
+                    }}
+                    color="success"
+                  />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Security Section */}
+          <Card className="border border-divider">
+            <CardBody className="p-0">
+              <div className="flex items-center gap-3 p-5 border-b border-divider">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/10 text-warning">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-default-900">Security</h3>
+                  <p className="text-sm text-default-500">Manage account security</p>
+                </div>
+              </div>
+              <div className="divide-y divide-divider">
+                <div className="flex items-center justify-between p-5">
+                  <div>
+                    <p className="text-sm font-medium text-default-900">Change Password</p>
+                    <p className="text-xs text-default-400">Update your login credentials</p>
+                  </div>
+                  <Button
+                    variant="flat"
+                    startContent={<Lock size={16} />}
+                    onPress={onPasswordOpen}
+                  >
+                    Update
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-5">
+                  <div>
+                    <p className="text-sm font-medium text-default-900">Active Sessions</p>
+                    <p className="text-xs text-default-400">Manage your active logins</p>
+                  </div>
+                  <Button variant="light" color="primary" onPress={onSessionsOpen}>
+                    View All
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border border-danger/30">
+            <CardBody className="p-0">
+              <div className="flex items-center gap-3 p-5 border-b border-divider">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-danger/10 text-danger">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-default-900">Danger Zone</h3>
+                  <p className="text-sm text-default-500">Irreversible actions</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-default-900">Delete Account</p>
+                    <p className="text-xs text-default-400">Permanently remove your account and data</p>
+                  </div>
+                  <Button
+                    color="danger"
+                    variant="flat"
+                    startContent={<Trash2 size={16} />}
+                    onPress={onDeleteOpen}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
       </div>
 
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Update Password</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Choose a strong new password.</p>
-            </div>
-            <div className="space-y-4">
-              <input
-                type="password"
-                value={passwordValue}
-                onChange={(e) => setPasswordValue(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
-                placeholder="New password"
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowPasswordModal(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                disabled={savingPassword}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!passwordValue) {
-                    addToast('Please enter a new password.', 'error');
-                    return;
-                  }
-                  setSavingPassword(true);
-                  try {
-                    await api.put('/users/me', { password: passwordValue });
-                    addToast('Password updated successfully.', 'success');
-                    setPasswordValue('');
-                    setShowPasswordModal(false);
-                  } catch (error) {
-                    addToast('Failed to update password.', 'error');
-                  } finally {
-                    setSavingPassword(false);
-                  }
-                }}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                disabled={savingPassword}
-              >
-                {savingPassword ? 'Saving...' : 'Save Password'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Password Modal */}
+      <Modal isOpen={isPasswordOpen} onOpenChange={onPasswordOpenChange}>
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <h2 className="text-lg font-bold text-default-900">Update Password</h2>
+                <p className="text-sm font-normal text-default-500">Enter your new password</p>
+              </ModalHeader>
+              <ModalBody>
+                <Input
+                  type="password"
+                  label="New Password"
+                  placeholder="Enter new password"
+                  value={passwordValue}
+                  onValueChange={setPasswordValue}
+                />
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose} isDisabled={savingPassword}>
+                  Cancel
+                </Button>
+                <Button color="primary" onPress={handlePasswordUpdate} isLoading={savingPassword}>
+                  Save Password
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
 
-      {showSessionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Active Sessions</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Your current login sessions.</p>
-            </div>
-            <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <div>
-                  <p className="font-medium">This device</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Active now</p>
+      {/* Sessions Modal */}
+      <Modal isOpen={isSessionsOpen} onOpenChange={onSessionsOpenChange}>
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <h2 className="text-lg font-bold text-default-900">Active Sessions</h2>
+                <p className="text-sm font-normal text-default-500">Your current logins</p>
+              </ModalHeader>
+              <ModalBody>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-default-50 border border-divider">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
+                      <Check size={18} className="text-success" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-default-900">This Device</p>
+                      <p className="text-xs text-default-400">Active now</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-success px-2 py-1 rounded-full bg-success/10">Current</span>
                 </div>
-                <span className="text-xs font-semibold text-emerald-600">Current</span>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowSessionsModal(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="bordered" onPress={onClose} className="w-full">
+                  Close
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
 
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/40 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Delete Account</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">This action is permanent.</p>
-            </div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">
-              Your account and data will be removed. This cannot be undone.
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setDeleting(true);
-                  try {
-                    await api.delete('/users/me');
-                    addToast('Account deleted.', 'success');
-                    logout();
-                    navigate('/');
-                  } catch (error) {
-                    addToast('Failed to delete account.', 'error');
-                  } finally {
-                    setDeleting(false);
-                  }
-                }}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
-                disabled={deleting}
-              >
-                {deleting ? 'Deleting...' : 'Delete Account'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Modal */}
+      <Modal isOpen={isDeleteOpen} onOpenChange={onDeleteOpenChange}>
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger">
+                    <Trash2 size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-default-900">Delete Account</h2>
+                    <p className="text-sm font-normal text-default-500">This action cannot be undone</p>
+                  </div>
+                </div>
+              </ModalHeader>
+              <ModalBody>
+                <p className="text-sm text-default-600">
+                  Your account and all associated data will be permanently deleted. This action is irreversible.
+                </p>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose} isDisabled={deleting}>
+                  Cancel
+                </Button>
+                <Button color="danger" onPress={handleDeleteAccount} isLoading={deleting}>
+                  Delete Account
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
 };

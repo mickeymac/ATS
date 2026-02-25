@@ -3,16 +3,29 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
-import { PageHeader } from '../components/PageHeader';
-import { Mail, Shield, Calendar, MapPin, Briefcase } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { 
+  Card, 
+  CardBody,
+  Avatar,
+  Button,
+  Input,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  Chip
+} from '@nextui-org/react';
+import { Mail, Shield, Calendar, MapPin, Briefcase, User, Edit3 } from 'lucide-react';
 
 const Profile = () => {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [profile, setProfile] = useState(null);
-  const [showEdit, setShowEdit] = useState(false);
   const [formState, setFormState] = useState({ name: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -37,11 +50,12 @@ const Profile = () => {
     { label: 'Account Role', value: profile?.role || user.role, icon: Shield },
     { label: 'Location', value: 'San Francisco, CA', icon: MapPin },
     { label: 'Department', value: user.role === 'hr' ? 'Human Resources' : user.role === 'admin' ? 'Operations' : 'Engineering', icon: Briefcase },
-    { label: 'Joined Date', value: profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '—', icon: Calendar },
+    { label: 'Joined Date', value: profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '-', icon: Calendar },
   ];
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const payload = { name: formState.name };
       if (formState.password) {
@@ -50,122 +64,123 @@ const Profile = () => {
       const response = await api.put('/users/me', payload);
       setProfile(response.data);
       addToast('Profile updated successfully.', 'success');
-      setShowEdit(false);
+      onClose();
       setFormState({ name: response.data.name || '', password: '' });
     } catch (error) {
       addToast('Failed to update profile.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <AppShell>
-      <PageHeader
-        title="My Profile"
-        description="Manage your personal information and account preferences."
-      />
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-default-900">My Profile</h1>
+          <p className="text-default-600">Manage your personal information and account preferences.</p>
+        </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Profile Card */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="md:col-span-1"
-        >
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center dark:border-slate-800 dark:bg-slate-900">
-            <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-slate-100 text-3xl font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-              {(profile?.email || user.email).charAt(0).toUpperCase()}
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              {profile?.name || (profile?.email || user.email).split('@')[0]}
-            </h2>
-            <p className="text-sm capitalize text-slate-500 dark:text-slate-400">{profile?.role || user.role}</p>
-            
-            <button
-              onClick={() => setShowEdit(true)}
-              className="mt-6 w-full rounded-lg bg-slate-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-            >
-              Edit Profile
-            </button>
-          </div>
-        </motion.div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Profile Card */}
+          <Card className="border border-divider">
+            <CardBody className="p-6 text-center">
+              <Avatar
+                className="mx-auto mb-4 w-24 h-24"
+                color="primary"
+                name={(profile?.email || user.email).charAt(0).toUpperCase()}
+                size="lg"
+                classNames={{
+                  base: "w-24 h-24",
+                  name: "text-3xl font-bold"
+                }}
+              />
+              <h2 className="text-xl font-bold text-default-900">
+                {profile?.name || (profile?.email || user.email).split('@')[0]}
+              </h2>
+              <Chip size="sm" variant="flat" color="primary" className="mt-2 capitalize">
+                {profile?.role || user.role}
+              </Chip>
+              
+              <Button
+                color="primary"
+                startContent={<Edit3 size={16} />}
+                className="mt-6 w-full"
+                onPress={onOpen}
+              >
+                Edit Profile
+              </Button>
+            </CardBody>
+          </Card>
 
-        {/* Details Card */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="md:col-span-2"
-        >
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="mb-6 text-lg font-bold text-slate-900 dark:text-slate-100">Personal Information</h3>
-            <div className="grid gap-6 sm:grid-cols-2">
-              {profileData.map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    {item.label}
-                  </p>
-                  <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
-                    <item.icon size={16} className="text-slate-400" />
-                    <span className="font-medium">{item.value}</span>
+          {/* Info Card */}
+          <Card className="md:col-span-2 border border-divider">
+            <CardBody className="p-6">
+              <h3 className="mb-6 text-lg font-bold text-default-900">Personal Information</h3>
+              <div className="grid gap-6 sm:grid-cols-2">
+                {profileData.map((item, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-default-400">
+                      {item.label}
+                    </p>
+                    <div className="flex items-center gap-2 text-default-900">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-default-100">
+                        <item.icon size={16} className="text-default-500" />
+                      </div>
+                      <span className="font-medium">{item.value}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            <div className="mt-8 border-t border-slate-100 pt-8 dark:border-slate-800">
-              <h3 className="mb-4 text-lg font-bold text-slate-900 dark:text-slate-100">Bio</h3>
-              <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                Experienced professional with a background in {user.role === 'hr' ? 'talent acquisition and HR strategy' : user.role === 'admin' ? 'systems administration and operational excellence' : 'software development and technical problem solving'}. 
-                Passionate about building efficient teams and leveraging AI to improve workplace productivity.
-              </p>
-            </div>
-          </div>
-        </motion.div>
+              <div className="mt-8 border-t border-divider pt-8">
+                <h3 className="mb-4 text-lg font-bold text-default-900">Bio</h3>
+                <p className="text-sm leading-relaxed text-default-600">
+                  Experienced professional with a background in {user.role === 'hr' ? 'talent acquisition and HR strategy' : user.role === 'admin' ? 'systems administration and operational excellence' : 'software development and technical problem solving'}. 
+                  Passionate about building efficient teams and leveraging AI to improve workplace productivity.
+                </p>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
       </div>
 
-      {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Edit Profile</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Update your name or password.</p>
-            </div>
-            <form onSubmit={handleUpdateProfile} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
-                <input
+      {/* Edit Profile Modal */}
+      <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="md">
+        <ModalContent>
+          {(onClose) => (
+            <form onSubmit={handleUpdateProfile}>
+              <ModalHeader className="flex flex-col gap-1">
+                <h2 className="text-lg font-bold text-default-900">Edit Profile</h2>
+                <p className="text-sm font-normal text-default-500">Update your name or password.</p>
+              </ModalHeader>
+              <ModalBody className="gap-4">
+                <Input
+                  label="Name"
+                  placeholder="Your name"
                   value={formState.name}
-                  onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                  onValueChange={(v) => setFormState({ ...formState, name: v })}
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">New Password</label>
-                <input
+                <Input
                   type="password"
+                  label="New Password"
+                  placeholder="Leave blank to keep current"
                   value={formState.password}
-                  onChange={(e) => setFormState({ ...formState, password: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                  onValueChange={(v) => setFormState({ ...formState, password: v })}
                 />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEdit(false)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                >
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose} isDisabled={loading}>
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                >
+                </Button>
+                <Button color="primary" type="submit" isLoading={loading}>
                   Save Changes
-                </button>
-              </div>
+                </Button>
+              </ModalFooter>
             </form>
-          </div>
-        </div>
-      )}
+          )}
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
 };

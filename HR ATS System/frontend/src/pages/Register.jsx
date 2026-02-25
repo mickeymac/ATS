@@ -1,91 +1,142 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
+import { 
+  Card, 
+  CardBody, 
+  Input, 
+  Button,
+  Select,
+  SelectItem
+} from "@nextui-org/react";
+import { Mail, Lock, User, Shield, ArrowRight } from "lucide-react";
+import Logo from "../components/Logo";
 
-const Register = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('candidate');
+export default function Register() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState(new Set(["hr"]));
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError("");
     try {
-      await register(name, email, password, role);
-      navigate('/login');
-    } catch (error) {
-      console.error(error);
-      setError('Registration failed. Email might be taken.');
+      await register(name, email, password, Array.from(role)[0]);
+      navigate("/login");
+    } catch (err) {
+      setError("Registration failed. Email might be taken.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <div className="mx-auto w-12 h-12 rounded bg-blue-600" />
-          <h1 className="mt-2 text-2xl font-bold">Create your account</h1>
-          <p className="text-sm text-gray-600">Join Tecnoprism to manage hiring efficiently</p>
-        </div>
-        <div className="bg-white rounded shadow p-6">
-          {error && <p className="text-red-500 mb-4">{error}</p>}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Name</label>
-              <input
-                type="text"
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Role</label>
-              <select
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <option value="candidate">Candidate</option>
-                <option value="hr">HR</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
-              Create account
-            </button>
-          </form>
-        </div>
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Already have an account? <Link to="/login" className="text-blue-600">Sign in</Link>
-        </p>
+    <div className="relative min-h-screen bg-background flex items-center justify-center overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-success/10 rounded-full blur-3xl" />
       </div>
+
+      <Card className="relative w-full max-w-md mx-4 border border-divider">
+        <CardBody className="p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <Logo />
+            </div>
+            <h1 className="text-2xl font-bold text-default-900">
+              Create Account
+            </h1>
+            <p className="text-sm text-default-500 mt-1">Join TecnoLegacy to manage hiring efficiently</p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="text-danger text-sm mb-4 text-center bg-danger/10 py-2 px-4 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Name"
+              placeholder="John Doe"
+              value={name}
+              onValueChange={setName}
+              startContent={<User className="w-4 h-4 text-default-400" />}
+              isRequired
+              classNames={{
+                inputWrapper: "bg-default-100",
+              }}
+            />
+
+            <Input
+              type="email"
+              label="Email"
+              placeholder="you@company.com"
+              value={email}
+              onValueChange={setEmail}
+              startContent={<Mail className="w-4 h-4 text-default-400" />}
+              isRequired
+              classNames={{
+                inputWrapper: "bg-default-100",
+              }}
+            />
+
+            <Input
+              type="password"
+              label="Password"
+              placeholder="••••••••"
+              value={password}
+              onValueChange={setPassword}
+              startContent={<Lock className="w-4 h-4 text-default-400" />}
+              isRequired
+              classNames={{
+                inputWrapper: "bg-default-100",
+              }}
+            />
+
+            <Select
+              label="Role"
+              placeholder="Select a role"
+              selectedKeys={role}
+              onSelectionChange={setRole}
+              startContent={<Shield className="w-4 h-4 text-default-400" />}
+              classNames={{
+                trigger: "bg-default-100",
+              }}
+            >
+              <SelectItem key="hr">HR</SelectItem>
+              <SelectItem key="admin">Admin</SelectItem>
+            </Select>
+
+            <Button
+              type="submit"
+              color="success"
+              className="w-full mt-2"
+              isLoading={loading}
+              endContent={!loading && <ArrowRight className="w-4 h-4" />}
+            >
+              Create Account
+            </Button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-default-500">
+            Already have an account?{" "}
+            <Link to="/login" className="text-primary hover:underline font-medium">
+              Sign in
+            </Link>
+          </p>
+        </CardBody>
+      </Card>
     </div>
   );
-};
-
-export default Register;
+}

@@ -15,3 +15,8 @@ scikit-learn
 python-dotenv
 aiofiles
 emails
+langchain
+langchain-core
+langchain-huggingface
+huggingface_hub
+nltk

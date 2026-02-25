@@ -1,90 +1,155 @@
 import { Link } from 'react-router-dom';
+import { Button, Card, CardBody } from "@nextui-org/react";
+import Logo from '../components/Logo';
 
-const Pill = ({ children }) => (
-  <span className="px-3 py-1 rounded bg-blue-50 text-blue-600 text-xs font-semibold">{children}</span>
-);
-
-const Card = ({ title, desc }) => (
-  <div className="bg-white rounded shadow p-6 hover:shadow-md transition">
-    <h3 className="text-lg font-semibold mb-2">{title}</h3>
-    <p className="text-sm text-gray-600">{desc}</p>
-  </div>
-);
-
-const Landing = () => {
+export default function Landing() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded bg-blue-600" />
-          <span className="text-lg font-bold">Tecnoprism</span>
+    <div className="bg-background text-default-900 min-h-screen">
+      {/* Navbar */}
+      <nav className="flex justify-between items-center px-6 md:px-10 py-6 border-b border-divider">
+        <Logo />
+        <div className="space-x-8 hidden md:flex">
+          <a href="#features" className="text-default-600 hover:text-default-900 transition">Features</a>
+          <a href="#how" className="text-default-600 hover:text-default-900 transition">How It Works</a>
         </div>
-        <nav className="flex items-center gap-6 text-sm text-gray-700">
-          <a href="#features" className="hover:text-blue-600">Features</a>
-          <a href="#about" className="hover:text-blue-600">About</a>
-          <a href="#contact" className="hover:text-blue-600">Contact</a>
-          <Link to="/login" className="px-4 py-2 rounded bg-black text-white">Get started</Link>
-        </nav>
-      </header>
+        <Button as={Link} to="/login" color="primary" radius="full">
+          Get started
+        </Button>
+      </nav>
 
-      <section className="max-w-6xl mx-auto px-6 pt-12 pb-16 text-center">
-        <div className="flex justify-center gap-2 mb-6">
-          <Pill>Minimal</Pill>
-          <Pill>Modern</Pill>
-          <Pill>ATS Platform</Pill>
+      {/* Hero Section */}
+      <section className="text-center px-6 md:px-20 py-20 relative overflow-hidden">
+        {/* Background decorations */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-success/10 rounded-full blur-3xl" />
         </div>
-        <h1 className="text-3xl md:text-3xl font-bold mb-3">Streamline Hiring With Tecnoprism</h1>
-        <p className="text-gray-600 mb-8">Plan, publish, and evaluate candidates with an AI‑assisted Applicant Tracking System.</p>
-        <div className="flex justify-center gap-4">
-          <Link to="/register" className="px-5 py-2 rounded bg-blue-600 text-white">Create account</Link>
-          <Link to="/login" className="px-5 py-2 rounded border">Sign in</Link>
+
+        <div className="relative">
+          <h2 className="text-4xl md:text-6xl font-extrabold leading-tight text-default-900">
+            Hire Smarter. <br /> Screen Faster.
+          </h2>
+          <p className="mt-6 text-lg text-default-600 max-w-2xl mx-auto">
+            AI-powered Applicant Tracking System that analyzes resumes,
+            ranks candidates instantly, and helps you hire the best talent faster.
+          </p>
+          <div className="mt-8 flex justify-center gap-4">
+            <Button color="primary" size="lg" radius="full">
+              Watch Demo
+            </Button>
+            <Button as={Link} to="/login" variant="bordered" size="lg" radius="full">
+              Get started
+            </Button>
+          </div>
+        </div>
+
+        {/* Floating Cards */}
+        <div className="relative mt-20 flex flex-col md:flex-row justify-center gap-6 md:gap-10">
+          <Card className="w-full md:w-64 transform rotate-0 md:rotate-6 border border-divider animate-bounce-slow">
+            <CardBody className="p-6 text-center">
+              <h3 className="font-bold text-default-900">Resume Score</h3>
+              <p className="text-4xl font-extrabold text-success mt-2">92%</p>
+              <p className="text-default-500 mt-2">Excellent Match</p>
+            </CardBody>
+          </Card>
+
+          <Card className="w-full md:w-64 transform rotate-0 md:-rotate-6 border border-divider animate-bounce-slow" style={{ animationDelay: '0.5s' }}>
+            <CardBody className="p-6 text-center">
+              <h3 className="font-bold text-default-900">Top Candidate</h3>
+              <p className="mt-2 text-default-600">John Doe</p>
+              <div className="mt-4 h-2 bg-default-200 rounded-full overflow-hidden">
+                <div className="h-2 bg-primary rounded-full w-4/5"></div>
+              </div>
+            </CardBody>
+          </Card>
         </div>
       </section>
 
-      <section id="features" className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-6 pb-16">
-        <Card title="Job Management" desc="Create roles, track status, and collaborate with HR in real time." />
-        <Card title="AI Scoring" desc="Automatically score resumes and highlight best matches instantly." />
-        <Card title="Candidate Portal" desc="Simple applications, status updates, and transparent feedback." />
-      </section>
+      {/* Features Section */}
+      <section id="features" className="px-6 md:px-20 py-20">
+        <h2 className="text-3xl md:text-4xl font-bold text-center text-default-900">
+          Everything You Need to Hire Better
+        </h2>
 
-      <section id="about" className="max-w-6xl mx-auto px-6 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded shadow p-6">
-            <h3 className="text-lg font-semibold mb-2">Built For Teams</h3>
-            <p className="text-sm text-gray-600">Keep HR, admins, and candidates aligned with clear workflows.</p>
-          </div>
-          <div className="bg-white rounded shadow p-6">
-            <h3 className="text-lg font-semibold mb-2">Fast & Secure</h3>
-            <p className="text-sm text-gray-600">Powered by FastAPI, MongoDB, and a modern React frontend.</p>
-          </div>
-          <div className="bg-white rounded shadow p-6">
-            <h3 className="text-lg font-semibold mb-2">Consistent Design</h3>
-            <p className="text-sm text-gray-600">Soft cards, clean typography, and ample whitespace keep it minimal.</p>
-          </div>
+        <div className="grid md:grid-cols-3 gap-8 mt-16">
+          {[
+            {
+              title: "AI Resume Analysis",
+              desc: "Automatically analyze resumes with semantic matching and skill extraction.",
+              color: "primary"
+            },
+            {
+              title: "Smart Ranking",
+              desc: "Instantly rank candidates based on job description match score.",
+              color: "success"
+            },
+            {
+              title: "Automated Shortlisting",
+              desc: "Filter candidates by skills, experience, and custom criteria.",
+              color: "warning"
+            },
+          ].map((feature, index) => (
+            <Card 
+              key={index} 
+              className="border border-divider hover:border-primary transition-colors"
+              isPressable
+            >
+              <CardBody className="p-8">
+                <div className={`w-12 h-12 rounded-xl bg-${feature.color}/10 flex items-center justify-center mb-4`}>
+                  <div className={`w-6 h-6 rounded-lg bg-${feature.color}`} />
+                </div>
+                <h3 className="text-xl font-semibold text-default-900">{feature.title}</h3>
+                <p className="text-default-600 mt-4">{feature.desc}</p>
+              </CardBody>
+            </Card>
+          ))}
         </div>
       </section>
 
-      <section id="contact" className="max-w-6xl mx-auto px-6 pb-20">
-        <div className="bg-blue-50 rounded p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold mb-1">Ready to hire smarter?</h3>
-            <p className="text-sm text-gray-600">Start free and upgrade when your team is ready.</p>
-          </div>
-          <Link to="/register" className="px-5 py-2 rounded bg-blue-600 text-white">Get started</Link>
+      {/* How It Works */}
+      <section id="how" className="bg-default-50 py-20 px-6 md:px-20">
+        <h2 className="text-3xl md:text-4xl font-bold text-center text-default-900">
+          How It Works
+        </h2>
+
+        <div className="grid md:grid-cols-4 gap-6 mt-16 text-center">
+          {[
+            "Upload Job Description", 
+            "Upload Resumes", 
+            "AI Analyzes & Scores", 
+            "View Ranked Candidates"
+          ].map((step, index) => (
+            <Card key={index} className="border border-divider">
+              <CardBody className="p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary font-bold text-xl flex items-center justify-center mx-auto mb-4">
+                  0{index + 1}
+                </div>
+                <p className="text-default-900 font-medium">{step}</p>
+              </CardBody>
+            </Card>
+          ))}
         </div>
       </section>
 
-      <footer className="max-w-6xl mx-auto px-6 py-8 text-sm text-gray-600">
-        <div className="flex items-center justify-between">
-          <span>© {new Date().getFullYear()} Tecnoprism</span>
-          <div className="flex items-center gap-4">
-            <Link to="/login" className="hover:text-blue-600">Login</Link>
-            <Link to="/register" className="hover:text-blue-600">Register</Link>
-          </div>
-        </div>
+      {/* CTA Section */}
+      <section className="px-6 md:px-20 py-20">
+        <Card className="bg-primary text-primary-foreground">
+          <CardBody className="p-12 text-center">
+            <h2 className="text-3xl font-bold">Ready to transform your hiring?</h2>
+            <p className="mt-4 opacity-80 max-w-xl mx-auto">
+              Join thousands of companies using TecnoLegacy to find the best talent faster.
+            </p>
+            <Button as={Link} to="/register" color="default" size="lg" radius="full" className="mt-8">
+              Start Free Trial
+            </Button>
+          </CardBody>
+        </Card>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-default-900 text-default-100 text-center py-6">
+        © 2026 TecnoLegacy. All rights reserved.
       </footer>
     </div>
   );
-};
-
-export default Landing;
+}

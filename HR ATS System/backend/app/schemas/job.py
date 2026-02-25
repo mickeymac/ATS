@@ -39,20 +39,75 @@ class ApplicationBase(BaseModel):
     job_id: str
 
 class ApplicationCreate(ApplicationBase):
-    candidate_id: str
+    uploaded_by: Optional[str] = None  # HR/Admin who uploaded the resume
     resume_file_path: str
     extracted_text: Optional[str] = None
 
-class ApplicationInDB(ApplicationCreate):
-    id: str = Field(alias="_id")
-    candidate_name: Optional[str] = None
-    job_title: Optional[str] = None
-    parsed_data: Optional[Dict[str, Any]] = None
-    scoring: Optional[Dict[str, Any]] = None
-    rule_score: float = 0.0
+class CandidateExtractedData(BaseModel):
+    """Structured candidate data extracted from resume using LLM."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    skills: List[str] = []
+    experience_years: float = 0.0
+    experience_months: int = 0
+    education: List[str] = []
+    certifications: List[str] = []
+    summary: Optional[str] = None
+    extraction_method: Optional[str] = None  # "llm" or "regex"
+
+class ScoringBreakdown(BaseModel):
+    """Detailed scoring breakdown."""
+    skill_score: float = 0.0
+    experience_score: float = 0.0
+    education_score: float = 0.0
     semantic_score: float = 0.0
     final_score: float = 0.0
-    score: float = 0.0
+    matched_skills: List[str] = []
+    missing_skills: List[str] = []
+    skill_coverage: float = 0.0
+    experience_match: float = 0.0
+    breakdown: Optional[Dict[str, float]] = None
+
+class ApplicationInDB(ApplicationCreate):
+    id: str = Field(alias="_id")
+    job_title: Optional[str] = None
+    
+    # Score fields (0-100 scale)
+    skill_score: float = 0.0
+    experience_score: float = 0.0
+    education_score: float = 0.0
+    semantic_score: float = 0.0
+    final_score: float = 0.0
+    
+    # Score display (X/Y format showing contribution out of max weight)
+    score_display: Optional[Dict[str, str]] = None
+    
+    # Score breakdown (actual weighted contributions)
+    score_breakdown: Optional[Dict[str, float]] = None
+    
+    # Skill matching details
+    matched_skills: List[str] = []
+    missing_skills: List[str] = []
+    skill_coverage: float = 0.0
+    
+    # Candidate extracted info (flattened for easy querying)
+    candidate_name_extracted: Optional[str] = None
+    candidate_email: Optional[str] = None
+    candidate_phone: Optional[str] = None
+    candidate_linkedin: Optional[str] = None
+    candidate_github: Optional[str] = None
+    candidate_experience_years: float = 0.0
+    candidate_experience_months: int = 0
+    candidate_education: List[str] = []
+    candidate_skills: List[str] = []
+    candidate_certifications: List[str] = []
+    candidate_summary: Optional[str] = None
+    extraction_method: Optional[str] = None  # "llm" or "regex"
+    
+    # Other fields
     ranking_position: Optional[int] = None
     status: ApplicationStatus = ApplicationStatus.APPLIED
     applied_at: datetime = Field(default_factory=datetime.utcnow)

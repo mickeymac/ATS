@@ -3,47 +3,74 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
-import { PageHeader } from '../components/PageHeader';
-import { StatusBadge } from '../components/StatusBadge';
-import { FileText, Search, User, Briefcase, Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { 
+  Card, 
+  CardBody,
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell, 
+  User, 
+  Chip, 
+  Input, 
+  Button,
+  Modal, 
+  ModalContent, 
+  ModalHeader, 
+  ModalBody, 
+  ModalFooter,
+  useDisclosure,
+  Select,
+  SelectItem,
+  Progress,
+  Spinner,
+  Divider
+} from '@nextui-org/react';
+import { 
+  FileText, 
+  Search, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  CheckCircle, 
+  XCircle, 
+  Clock,
+  Star,
+  Download
+} from 'lucide-react';
 
-const SkeletonLoader = ({ className }) => <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-md ${className}`} />;
+const statusColorMap = {
+  'Applied': 'default',
+  'Under Review': 'warning',
+  'Shortlisted': 'success',
+  'Interview Scheduled': 'primary',
+  'Selected': 'success',
+  'Rejected': 'danger',
+};
 
-const EmptyState = ({ title, description }) => (
-  <div className="flex flex-col items-center justify-center py-12 text-center">
-    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-      <FileText className="h-6 w-6 text-slate-400" />
-    </div>
-    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">{title}</h3>
-    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>
-  </div>
-);
-
-const Applications = () => {
+export default function Applications() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
     try {
-      let endpoint = '/applications/';
-      if (user?.role === 'candidate') {
-        endpoint = '/applications/my-applications';
-      }
-      const response = await api.get(endpoint);
+      const response = await api.get('/applications/');
       setApplications(response.data);
     } catch (error) {
       addToast('Failed to fetch applications.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast, user?.role]);
+  }, [addToast]);
 
   useEffect(() => {
     fetchApplications();
@@ -56,18 +83,21 @@ const Applications = () => {
         app._id === id ? { ...app, status: newStatus } : app
       ));
       addToast(`Application marked as ${newStatus}.`, 'success');
+      onClose();
     } catch (error) {
       addToast('Failed to update status.', 'error');
     }
   };
 
-  const openDetails = (app) => {
-    setSelectedApplication(app);
+  const handleViewDetails = (app) => {
+    setSelectedApp(app);
+    onOpen();
   };
 
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
-      (app.candidate_name?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (app.candidate_name_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (app.candidate_email_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (app.job_title?.toLowerCase().includes(searchQuery.toLowerCase()) || false);
     const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
     return matchesSearch && matchesStatus;
@@ -75,195 +105,273 @@ const Applications = () => {
 
   const isHR = user?.role === 'hr' || user?.role === 'admin';
 
+  // Stats
+  const stats = {
+    total: applications.length,
+    pending: applications.filter(a => ['Applied', 'Under Review'].includes(a.status)).length,
+    shortlisted: applications.filter(a => a.status === 'Shortlisted').length,
+  };
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex h-96 items-center justify-center">
+          <Spinner size="lg" label="Loading applications..." />
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
-      <PageHeader
-        title="Applications"
-        description={isHR ? "Review and manage candidate applications for all roles." : "Track the status of your submitted applications."}
-      />
+      <div className="flex flex-col gap-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-default-900">Applications</h1>
+          <p className="text-default-600">Review and manage candidate applications</p>
+        </div>
 
-      <div className="space-y-6">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-default-900">{stats.total}</p>
+            <p className="text-xs text-default-500">Total</p>
+          </Card>
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-warning">{stats.pending}</p>
+            <p className="text-xs text-default-500">Pending</p>
+          </Card>
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-success">{stats.shortlisted}</p>
+            <p className="text-xs text-default-500">Shortlisted</p>
+          </Card>
+        </div>
+
         {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by candidate or job title..."
+        <Card className="p-4 border border-divider">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <Input
+              classNames={{
+                base: "flex-1",
+                inputWrapper: "bg-default-100",
+              }}
+              placeholder="Search candidates, emails, or jobs..."
+              startContent={<Search size={18} className="text-default-400" />}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none ring-slate-900/5 transition-all focus:border-slate-900 focus:ring-4 dark:border-slate-800 dark:bg-slate-900 dark:focus:border-slate-100 dark:focus:ring-slate-100/5"
+              onValueChange={setSearchQuery}
             />
+            <Select
+              className="w-48"
+              selectedKeys={[filterStatus]}
+              onSelectionChange={(keys) => setFilterStatus(Array.from(keys)[0])}
+              aria-label="Filter by status"
+            >
+              <SelectItem key="all">All Status</SelectItem>
+              <SelectItem key="Applied">Applied</SelectItem>
+              <SelectItem key="Under Review">Under Review</SelectItem>
+              <SelectItem key="Shortlisted">Shortlisted</SelectItem>
+              <SelectItem key="Interview Scheduled">Interview</SelectItem>
+              <SelectItem key="Selected">Selected</SelectItem>
+              <SelectItem key="Rejected">Rejected</SelectItem>
+            </Select>
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:focus:border-slate-100"
-          >
-            <option value="all">All Statuses</option>
-            <option value="Applied">Applied</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Shortlisted">Shortlisted</option>
-            <option value="Interview Scheduled">Interview Scheduled</option>
-            <option value="Selected">Selected</option>
-            <option value="Rejected">Rejected</option>
-          </select>
-        </div>
+        </Card>
 
-        {/* Applications Table/List */}
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
-                <tr>
-                  <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
-                    {isHR ? 'Candidate' : 'Job Title'}
-                  </th>
-                  {isHR && (
-                    <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">Job Role</th>
-                  )}
-                  <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">Applied Date</th>
-                  <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100 text-center">AI Score</th>
-                  <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">Status</th>
-                  <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {loading ? (
-                  [1, 2, 3].map(i => (
-                    <tr key={i}>
-                      <td colSpan={isHR ? 6 : 5} className="px-6 py-4">
-                        <SkeletonLoader className="h-4 w-full" />
-                      </td>
-                    </tr>
-                  ))
-                ) : filteredApplications.length > 0 ? (
-                  filteredApplications.map((app) => (
-                    <motion.tr
-                      key={app._id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="group transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                            {isHR ? <User size={14} /> : <Briefcase size={14} />}
-                          </div>
-                          <span className="font-medium text-slate-900 dark:text-slate-100">
-                            {isHR ? app.candidate_name : app.job_title}
-                          </span>
-                        </div>
-                      </td>
-                      {isHR && (
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{app.job_title}</td>
-                      )}
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={14} />
-                          {new Date(app.applied_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                          (app.score ?? app.final_score ?? 0) >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          (app.score ?? app.final_score ?? 0) >= 50 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                          {(app.score ?? app.final_score ?? 0).toFixed(1)}%
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={app.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          {isHR ? (
-                            <>
-                              <button
-                                onClick={() => handleUpdateStatus(app._id, 'Shortlisted')}
-                                title="Shortlist"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-green-600 transition-colors hover:bg-green-50 dark:border-slate-800 dark:hover:bg-green-900/20"
-                              >
-                                <CheckCircle size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleUpdateStatus(app._id, 'Rejected')}
-                                title="Reject"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-red-600 transition-colors hover:bg-red-50 dark:border-slate-800 dark:hover:bg-red-900/20"
-                              >
-                                <XCircle size={14} />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => openDetails(app)}
-                              className="text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-                            >
-                              View Details
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={isHR ? 6 : 5} className="px-6 py-12">
-                      <EmptyState
-                        title="No applications found"
-                        description={searchQuery || filterStatus !== 'all' ? "No applications match your filters." : "No applications have been submitted yet."}
+        {/* Applications Table */}
+        {filteredApplications.length === 0 ? (
+          <Card className="p-12 text-center border border-divider">
+            <CardBody className="flex flex-col items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-default-100">
+                <FileText className="h-8 w-8 text-default-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-default-900">No applications found</h3>
+              <p className="text-sm text-default-500">Applications will appear here once candidates apply.</p>
+            </CardBody>
+          </Card>
+        ) : (
+          <Card className="border border-divider">
+            <Table aria-label="Applications table" removeWrapper>
+              <TableHeader>
+                <TableColumn>CANDIDATE</TableColumn>
+                <TableColumn>JOB</TableColumn>
+                <TableColumn>STATUS</TableColumn>
+                <TableColumn>SCORE</TableColumn>
+                <TableColumn>DATE</TableColumn>
+                <TableColumn>ACTIONS</TableColumn>
+              </TableHeader>
+              <TableBody>
+                {filteredApplications.map((app) => (
+                  <TableRow key={app._id} className="cursor-pointer hover:bg-default-50" onClick={() => handleViewDetails(app)}>
+                    <TableCell>
+                      <User
+                        avatarProps={{ radius: "lg", src: `https://i.pravatar.cc/150?u=${app._id}` }}
+                        name={app.candidate_name_extracted || 'Unknown'}
+                        description={app.candidate_email_extracted}
+                        classNames={{
+                          name: "text-default-900",
+                          description: "text-default-500",
+                        }}
                       />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-medium text-default-900">{app.job_title}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        size="sm" 
+                        variant="flat" 
+                        color={statusColorMap[app.status] || "default"}
+                      >
+                        {app.status}
+                      </Chip>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Star size={14} className={app.match_score >= 80 ? 'text-success fill-success' : app.match_score >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
+                        <span className={`font-semibold ${
+                          app.match_score >= 80 ? 'text-success' : 
+                          app.match_score >= 60 ? 'text-warning' : 'text-danger'
+                        }`}>
+                          {app.match_score?.toFixed(0) || 0}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-default-500 text-sm">
+                        {new Date(app.applied_at).toLocaleDateString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="flat" color="primary" onPress={() => handleViewDetails(app)}>
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
       </div>
 
-      {selectedApplication && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Application Details</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{selectedApplication.job_title}</p>
-            </div>
-            <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Status</span>
-                <StatusBadge status={selectedApplication.status} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Applied</span>
-                <span>{new Date(selectedApplication.applied_at).toLocaleDateString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">AI Score</span>
-                <span>{(selectedApplication.score ?? selectedApplication.final_score ?? 0).toFixed(1)}%</span>
-              </div>
-              {selectedApplication.candidate_name && (
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Candidate</span>
-                  <span>{selectedApplication.candidate_name}</span>
+      {/* Application Details Modal */}
+      <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="3xl" scrollBehavior="inside">
+        <ModalContent>
+          {(onClose) => selectedApp && (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex items-center gap-4">
+                  <User
+                    avatarProps={{ radius: "lg", size: "lg", src: `https://i.pravatar.cc/150?u=${selectedApp._id}` }}
+                    name={selectedApp.candidate_name_extracted || 'Unknown Candidate'}
+                    description={selectedApp.job_title}
+                    classNames={{
+                      name: "text-xl font-bold text-default-900",
+                      description: "text-default-600",
+                    }}
+                  />
                 </div>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedApplication(null)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </ModalHeader>
+              <ModalBody>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Contact Info */}
+                  <Card className="border border-divider">
+                    <CardBody className="gap-3">
+                      <h4 className="font-semibold text-default-900">Contact Information</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2 text-default-600">
+                          <Mail size={14} /> {selectedApp.candidate_email_extracted || 'N/A'}
+                        </div>
+                        <div className="flex items-center gap-2 text-default-600">
+                          <Phone size={14} /> {selectedApp.candidate_phone_extracted || 'N/A'}
+                        </div>
+                        <div className="flex items-center gap-2 text-default-600">
+                          <MapPin size={14} /> {selectedApp.candidate_location_extracted || 'N/A'}
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  {/* Score */}
+                  <Card className="border border-divider">
+                    <CardBody className="gap-3">
+                      <h4 className="font-semibold text-default-900">ATS Match Score</h4>
+                      <div className="flex items-center gap-4">
+                        <span className={`text-4xl font-bold ${
+                          selectedApp.match_score >= 80 ? 'text-success' : 
+                          selectedApp.match_score >= 60 ? 'text-warning' : 'text-danger'
+                        }`}>
+                          {selectedApp.match_score?.toFixed(0) || 0}%
+                        </span>
+                        <Progress 
+                          value={selectedApp.match_score || 0} 
+                          color={selectedApp.match_score >= 80 ? 'success' : selectedApp.match_score >= 60 ? 'warning' : 'danger'}
+                          className="flex-1"
+                        />
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+
+                <Divider className="my-2" />
+
+                {/* Skills */}
+                {selectedApp.extracted_skills && selectedApp.extracted_skills.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-default-900 mb-2">Extracted Skills</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedApp.extracted_skills.map((skill, idx) => (
+                        <Chip key={idx} size="sm" variant="flat" color="primary">{skill}</Chip>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Resume Text Preview */}
+                {selectedApp.parsed_text && (
+                  <div>
+                    <h4 className="font-semibold text-default-900 mb-2">Resume Summary</h4>
+                    <div className="bg-default-100 rounded-xl p-4 text-sm text-default-600 max-h-48 overflow-y-auto">
+                      {selectedApp.parsed_text.substring(0, 1000)}...
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Update */}
+                {isHR && (
+                  <div>
+                    <h4 className="font-semibold text-default-900 mb-2">Update Status</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" color="success" variant="flat" startContent={<CheckCircle size={14} />}
+                        onPress={() => handleUpdateStatus(selectedApp._id, 'Shortlisted')}>
+                        Shortlist
+                      </Button>
+                      <Button size="sm" color="primary" variant="flat" startContent={<Clock size={14} />}
+                        onPress={() => handleUpdateStatus(selectedApp._id, 'Interview Scheduled')}>
+                        Schedule Interview
+                      </Button>
+                      <Button size="sm" color="danger" variant="flat" startContent={<XCircle size={14} />}
+                        onPress={() => handleUpdateStatus(selectedApp._id, 'Rejected')}>
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose}>
+                  Close
+                </Button>
+                {selectedApp.file_path && (
+                  <Button color="primary" startContent={<Download size={16} />}>
+                    Download Resume
+                  </Button>
+                )}
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
-};
-
-export default Applications;
+}

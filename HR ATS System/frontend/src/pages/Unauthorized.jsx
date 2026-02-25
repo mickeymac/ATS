@@ -1,28 +1,39 @@
 import { Link } from 'react-router-dom';
+import { Card, CardBody, Button } from '@nextui-org/react';
+import { ShieldAlert, Home, LayoutDashboard } from 'lucide-react';
 
 const Unauthorized = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Unauthorized</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          You don’t have permission to access this page.
-        </p>
-        <div className="mt-6 flex gap-3">
-          <Link
-            to="/dashboard"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90"
-          >
-            Go to dashboard
-          </Link>
-          <Link
-            to="/"
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          >
-            Back to home
-          </Link>
-        </div>
-      </div>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-md border border-divider">
+        <CardBody className="p-8 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-danger/10 mx-auto mb-4">
+            <ShieldAlert className="h-8 w-8 text-danger" />
+          </div>
+          <h1 className="text-xl font-bold text-default-900">Unauthorized Access</h1>
+          <p className="mt-2 text-sm text-default-600">
+            You don't have permission to access this page.
+          </p>
+          <div className="mt-6 flex gap-3 justify-center">
+            <Button
+              as={Link}
+              to="/dashboard"
+              color="primary"
+              startContent={<LayoutDashboard size={16} />}
+            >
+              Go to dashboard
+            </Button>
+            <Button
+              as={Link}
+              to="/"
+              variant="bordered"
+              startContent={<Home size={16} />}
+            >
+              Back to home
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 };

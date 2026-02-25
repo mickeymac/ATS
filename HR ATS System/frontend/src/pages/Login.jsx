@@ -1,66 +1,96 @@
 import { useState } from 'react';
+import { Button, Card, CardBody, CardHeader, Input, Link } from '@nextui-org/react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Mail, Lock } from 'lucide-react';
+import { Logo } from '../components/Logo';
 
-const Login = () => {
+export default function Login() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useAuth();
-  const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
-      navigate('/dashboard');
-    } else {
-      setError('Invalid credentials');
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const success = await login(email, password);
+      if (success) {
+        navigate('/dashboard');
+      } else {
+        setError('Invalid email or password');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <div className="mx-auto w-12 h-12 rounded bg-blue-600" />
-          <h1 className="mt-2 text-2xl font-bold">Welcome back</h1>
-          <p className="text-sm text-gray-600">Sign in to your Tecnoprism account</p>
-        </div>
-        <div className="bg-white rounded shadow p-6">
-          {error && <p className="text-red-500 mb-4">{error}</p>}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="min-h-screen flex items-center justify-center bg-default-50 p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="flex flex-col items-center gap-2 pb-0 pt-8">
+          <Logo size={48} showText className="mb-2" textClassName="text-2xl" />
+          <h1 className="text-2xl text-default-800 font-bold">Welcome back</h1>
+          <p className="text-sm text-default-500">Sign in to your account to continue</p>
+        </CardHeader>
+        <CardBody className="px-8 py-8">
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <Input
+              label="Email"
+              placeholder="Enter your email"
+              type="email"
+              startContent={<Mail className="text-default-400" size={18} />}
+              value={email}
+              onValueChange={setEmail}
+              isRequired
+              isInvalid={!!error}
+            />
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              type="password"
+              startContent={<Lock className="text-default-400" size={18} />}
+              value={password}
+              onValueChange={setPassword}
+              isRequired
+              isInvalid={!!error}
+              errorMessage={error}
+            />
+            <div className="flex justify-between items-center text-xs">
+              <Link href="#" size="sm" className="text-default-500">Forgot password?</Link>
             </div>
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+            
+            <Button 
+              color="primary" 
+              type="submit" 
+              className="w-full font-semibold"
+              isLoading={isLoading}
+            >
+              Sign In
+            </Button>
+            
+            <p className="text-center text-sm text-default-500">
+              Don't have an account?{' '}
+              <RouterLink to="/register" className="text-primary font-medium hover:underline">
+                Sign up
+              </RouterLink>
+            </p>
+            
+            <div className="mt-4 rounded-lg bg-default-100 p-3 text-xs text-default-500">
+              <p className="font-semibold mb-1">Demo Credentials:</p>
+              <p>Email: admin@tecnolegacy.com</p>
+              <p>Password: admin</p>
             </div>
-            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
-              Sign in
-            </button>
           </form>
-        </div>
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Don’t have an account? <Link to="/register" className="text-blue-600">Create one</Link>
-        </p>
-      </div>
+        </CardBody>
+      </Card>
     </div>
   );
-};
-
-export default Login;
+}

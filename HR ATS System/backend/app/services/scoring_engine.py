@@ -3,9 +3,9 @@ Production-grade resume scoring engine with explainable, structured scoring.
 
 Final Score Formula:
 Final Score = (0.35 × Weighted Skill Score)
-            + (0.20 × Experience Score)
+            + (0.25 × Experience Score)
             + (0.10 × Education Score)
-            + (0.35 × Section-Based Semantic Score)
+            + (0.30 × Section-Based Semantic Score)
 
 All scores normalized to 0-100 scale.
 """
@@ -110,11 +110,12 @@ class ResumeScorer:
         )
         
         # 5. FINAL SCORE (weighted combination)
+        # Adjusted weights: 35% skill, 25% exp, 10% edu, 30% semantic
         final_score = (
             0.35 * skill_result['skill_score'] +
-            0.20 * experience_score +
+            0.25 * experience_score +
             0.10 * education_score +
-            0.35 * semantic_score
+            0.30 * semantic_score
         )
         final_score = self._clamp_score(final_score)
         
@@ -131,12 +132,11 @@ class ResumeScorer:
                 100 if parsed_candidate_data.get('experience_years', 0) >= job_experience_years
                 else (parsed_candidate_data.get('experience_years', 0) / max(job_experience_years, 1)) * 100
             )),
-            "semantic_similarity": self._clamp_score(semantic_score),
             "breakdown": {
                 "skill_component": skill_result['skill_score'] * 0.35,
-                "experience_component": experience_score * 0.20,
+                "experience_component": experience_score * 0.25,
                 "education_component": education_score * 0.10,
-                "semantic_component": semantic_score * 0.35,
+                "semantic_component": semantic_score * 0.30,
             }
         }
     
@@ -219,11 +219,21 @@ class ResumeScorer:
     ) -> float:
         """
         Score experience based on years.
+        If no requirement set (0), give neutral 50
+        If no candidate experience found (0), give 0
         If candidate_years >= required_years: 100
         Else: (candidate_years / required_years) * 100
         """
+        # If no requirement specified, give neutral score
         if required_years == 0:
-            return 100.0
+            # But if candidate has no experience either, give lower score
+            if candidate_years == 0:
+                return 50.0  # Neutral when both are 0
+            return 100.0  # Full marks if candidate has experience and no req
+        
+        # If candidate has no experience but job requires it
+        if candidate_years == 0:
+            return 0.0
         
         if candidate_years >= required_years:
             return 100.0
@@ -240,8 +250,11 @@ class ResumeScorer:
         Score education match.
         Check if candidate has relevant degree keywords.
         """
-        if not required_education:
-            return 50.0  # No requirement, give neutral score
+        # If no education requirement, check if candidate has any education
+        if not required_education or required_education.lower() in ['any', 'none', '']:
+            if not candidate_education:
+                return 30.0  # No education found, low score
+            return 70.0  # Has some education, good score
         
         if not candidate_education:
             return 0.0  # Required but not found
@@ -353,6 +366,117 @@ class ResumeScorer:
         except Exception as e:
             print(f"Embedding error: {e}")
             return 0.0
+    
+    def _score_formatting(
+        self,
+        parsed_candidate_data: Dict[str, Any],
+        resume_text: str
+    ) -> Dict[str, Any]:
+        """
+        Score resume formatting and completeness.
+        Checks for:
+        - Contact information (email, phone)
+        - LinkedIn profile
+        - Resume length
+        - Professional structure
+        """
+        score = 100.0
+        issues = []
+        
+        # 1. Email check (critical)
+        email = parsed_candidate_data.get('email', '')
+        if not email:
+            score -= 25
+            issues.append("Email address missing from resume")
+        
+        # 2. Phone check (important)
+        phone = parsed_candidate_data.get('phone', '')
+        if not phone:
+            score -= 20
+            issues.append("Phone number missing from resume")
+        
+        # 3. LinkedIn profile (recommended)
+        linkedin = parsed_candidate_data.get('linkedin_url', '')
+        if not linkedin:
+            score -= 10
+            issues.append("LinkedIn profile link recommended")
+        
+        # 4. GitHub profile (nice to have for tech roles)
+        github = parsed_candidate_data.get('github_url', '')
+        if not github:
+            score -= 5
+            issues.append("GitHub profile link would strengthen your application")
+        
+        # 5. Resume length check
+        min_length = 500
+        if len(resume_text) < min_length:
+            score -= 20
+            issues.append("Resume content appears too short. Add more details about experience and projects.")
+        elif len(resume_text) < 1000:
+            score -= 10
+            issues.append("Consider adding more detail to your resume")
+        
+        # 6. Has name
+        name = parsed_candidate_data.get('name', '')
+        if not name or name == "Unknown":
+            score -= 10
+            issues.append("Name not clearly identified at the start of resume")
+        
+        # 7. Has skills listed
+        skills = parsed_candidate_data.get('skills', [])
+        if not skills:
+            score -= 10
+            issues.append("No skills section identified. Add a clear 'Skills' section")
+        
+        return {
+            "formatting_score": max(0.0, score),
+            "formatting_issues": issues
+        }
+    
+    def _generate_recommendations(
+        self,
+        skill_result: Dict[str, Any],
+        experience_score: float,
+        education_score: float,
+        semantic_score: float,
+        formatting_issues: List[str],
+        required_experience_years: float
+    ) -> List[str]:
+        """
+        Generate actionable recommendations based on scoring results.
+        """
+        recommendations = []
+        
+        # Skill recommendations
+        missing_skills = skill_result.get('missing_skills', [])
+        if missing_skills:
+            top_missing = missing_skills[:5]
+            recommendations.append(f"Consider adding these key skills: {', '.join(str(s) for s in top_missing)}")
+        
+        skill_score = skill_result.get('skill_score', 0)
+        if skill_score < 50:
+            recommendations.append("Your skill set has limited overlap with job requirements. Consider skill development.")
+        
+        # Experience recommendations
+        if experience_score < 70:
+            recommendations.append(f"The role requires more experience. Highlight relevant projects that demonstrate expertise.")
+        
+        # Education recommendations
+        if education_score < 50:
+            recommendations.append("Education requirements may not be fully met. Highlight relevant certifications or training.")
+        
+        # Semantic recommendations
+        if semantic_score < 50:
+            recommendations.append("Tailor your resume to better match the job description keywords and responsibilities.")
+        
+        # Add formatting issues as recommendations
+        recommendations.extend(formatting_issues[:3])
+        
+        # General recommendations if score is good
+        if not recommendations:
+            recommendations.append("Your profile is a strong match for this position!")
+        
+        return recommendations[:7]  # Limit to top 7 recommendations
     
     @staticmethod
     def _clamp_score(value: float) -> float:

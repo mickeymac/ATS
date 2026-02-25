@@ -3,11 +3,44 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
-import { PageHeader } from '../components/PageHeader';
-import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Trash2, MoreVertical } from 'lucide-react';
-import { motion } from 'framer-motion';
-
-const SkeletonLoader = ({ className }) => <div className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded-md ${className}`} />;
+import { 
+  Card, 
+  CardBody,
+  Table, 
+  TableHeader, 
+  TableColumn, 
+  TableBody, 
+  TableRow, 
+  TableCell, 
+  User, 
+  Chip, 
+  Input, 
+  Button,
+  Modal, 
+  ModalContent, 
+  ModalHeader, 
+  ModalBody, 
+  ModalFooter,
+  useDisclosure,
+  Select,
+  SelectItem,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  Skeleton
+} from '@nextui-org/react';
+import { 
+  Users as UsersIcon, 
+  Search, 
+  UserPlus, 
+  Copy, 
+  Trash2, 
+  ShieldCheck, 
+  Shield, 
+  ShieldAlert,
+  MoreVertical
+} from 'lucide-react';
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -15,10 +48,9 @@ const Users = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'hr' });
-  const [openMenuId, setOpenMenuId] = useState(null);
+  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -59,7 +91,7 @@ const Users = () => {
     try {
       await api.post('/users/', newUser);
       addToast('User created successfully.', 'success');
-      setShowCreateModal(false);
+      onClose();
       setNewUser({ name: '', email: '', password: '', role: 'hr' });
       fetchUsers();
     } catch (error) {
@@ -83,12 +115,22 @@ const Users = () => {
     u.role?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Stats
+  const stats = {
+    total: users.length,
+    admins: users.filter(u => u.role === 'admin').length,
+    hr: users.filter(u => u.role === 'hr').length,
+  };
+
   if (currentUser?.role !== 'admin') {
     return (
       <AppShell>
-        <PageHeader title="Access Denied" description="Only administrators can manage users." />
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400">
-          You do not have permission to view this page.
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-danger/10 mb-4">
+            <ShieldAlert className="h-8 w-8 text-danger" />
+          </div>
+          <h2 className="text-xl font-bold text-default-900">Access Denied</h2>
+          <p className="text-sm text-default-500 mt-2">Only administrators can manage users.</p>
         </div>
       </AppShell>
     );
@@ -96,201 +138,207 @@ const Users = () => {
 
   return (
     <AppShell>
-      <PageHeader
-        title="User Management"
-        description="View and manage all registered users on the platform."
-        actions={
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+      <div className="flex flex-col gap-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">Users</h1>
+            <p className="text-default-600">{users.length} registered users</p>
+          </div>
+          <Button 
+            color="primary" 
+            startContent={<UserPlus size={18} />}
+            onPress={onOpen}
           >
-            <UserPlus size={16} />
             Add User
-          </button>
-        }
-      />
+          </Button>
+        </div>
 
-      <div className="space-y-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-default-900">{stats.total}</p>
+            <p className="text-xs text-default-500">Total Users</p>
+          </Card>
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-warning">{stats.admins}</p>
+            <p className="text-xs text-default-500">Admins</p>
+          </Card>
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-primary">{stats.hr}</p>
+            <p className="text-xs text-default-500">HR Staff</p>
+          </Card>
+        </div>
+
+        {/* Search */}
+        <Card className="p-4 border border-divider">
+          <Input
+            classNames={{
+              inputWrapper: "bg-default-100",
+            }}
             placeholder="Search by email or role..."
+            startContent={<Search size={18} className="text-default-400" />}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none ring-slate-900/5 transition-all focus:border-slate-900 focus:ring-4 dark:border-slate-800 dark:bg-slate-900 dark:focus:border-slate-100 dark:focus:ring-slate-100/5"
+            onValueChange={setSearchQuery}
           />
-        </div>
+        </Card>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">User</th>
-                <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">Role</th>
-                <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">Status</th>
-                <th className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {loading ? (
-                [1, 2, 3].map(i => (
-                  <tr key={i}>
-                    <td colSpan={4} className="px-6 py-4">
-                      <SkeletonLoader className="h-4 w-full" />
-                    </td>
-                  </tr>
-                ))
-              ) : filteredUsers.length > 0 ? (
-                filteredUsers.map((u) => (
-                  <motion.tr
-                    key={u._id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="group transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                          {u.email.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">{u.email}</p>
-                          <div className="flex items-center gap-1 text-xs text-slate-500">
-                            <Mail size={12} />
-                            {u.email}
-                          </div>
-                        </div>
+        {/* Users Table */}
+        <Card className="border border-divider">
+          <Table aria-label="Users table" removeWrapper>
+            <TableHeader>
+              <TableColumn>USER</TableColumn>
+              <TableColumn>ROLE</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn align="end">ACTIONS</TableColumn>
+            </TableHeader>
+            <TableBody 
+              emptyContent={
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-default-100 mb-4">
+                    <UsersIcon className="h-8 w-8 text-default-400" />
+                  </div>
+                  <p className="font-medium text-default-900">No users found</p>
+                  <p className="text-sm text-default-500">Try adjusting your search</p>
+                </div>
+              }
+              isLoading={loading}
+              loadingContent={
+                <div className="space-y-4 w-full p-6">
+                  {[1,2,3,4].map(i => (
+                    <div key={i} className="flex items-center gap-4">
+                      <Skeleton className="rounded-full w-10 h-10" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-32 rounded" />
+                        <Skeleton className="h-3 w-24 rounded" />
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 capitalize text-slate-600 dark:text-slate-400">
-                        <Shield size={14} className={u.role === 'admin' ? 'text-amber-500' : 'text-slate-400'} />
-                        {u.role}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                        Active
-                      </span>
-                    </td>
-                    <td className="relative px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleDeleteUser(u._id)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-800 dark:text-slate-400 dark:hover:border-red-900/50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => setOpenMenuId(openMenuId === u._id ? null : u._id)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
-                        >
-                          <MoreVertical size={14} />
-                        </button>
-                        {openMenuId === u._id && (
-                          <div className="absolute right-6 mt-10 w-44 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleCopyEmail(u.email);
-                                setOpenMenuId(null);
-                              }}
-                              className="w-full px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                              Copy Email
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-slate-500">
-                      <UsersIcon className="mb-4 h-12 w-12 text-slate-300" />
-                      <p>No users found matching your search.</p>
                     </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </div>
+              }
+            >
+              {filteredUsers.map((u) => (
+                <TableRow key={u._id}>
+                  <TableCell>
+                    <User
+                      avatarProps={{ 
+                        radius: "lg", 
+                        color: "primary",
+                        name: u.email.charAt(0).toUpperCase()
+                      }}
+                      name={u.email}
+                      description={u.name || 'No name set'}
+                      classNames={{
+                        name: "text-default-900",
+                        description: "text-default-500",
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="sm"
+                      variant="flat"
+                      color={u.role === 'admin' ? 'warning' : 'primary'}
+                      startContent={u.role === 'admin' ? <ShieldCheck size={12} /> : <Shield size={12} />}
+                    >
+                      {u.role?.toUpperCase()}
+                    </Chip>
+                  </TableCell>
+                  <TableCell>
+                    <Chip size="sm" variant="dot" color="success">
+                      Active
+                    </Chip>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end">
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button isIconOnly variant="light" size="sm">
+                            <MoreVertical size={16} />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="User actions">
+                          <DropdownItem
+                            key="copy"
+                            startContent={<Copy size={16} />}
+                            onPress={() => handleCopyEmail(u.email)}
+                          >
+                            Copy Email
+                          </DropdownItem>
+                          <DropdownItem
+                            key="delete"
+                            color="danger"
+                            className={u._id === currentUser?._id ? 'hidden' : ''}
+                            startContent={<Trash2 size={16} />}
+                            onPress={() => handleDeleteUser(u._id)}
+                          >
+                            Delete User
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Add User</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Create a new account.</p>
-            </div>
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
-                <input
-                  required
+      {/* Create User Modal */}
+      <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="md">
+        <ModalContent>
+          {(onClose) => (
+            <form onSubmit={handleCreateUser}>
+              <ModalHeader className="flex flex-col gap-1">
+                <h2 className="text-lg font-bold text-default-900">Create User</h2>
+                <p className="text-sm font-normal text-default-500">Add a new user to the system</p>
+              </ModalHeader>
+              <ModalBody className="gap-4">
+                <Input
+                  label="Name"
+                  placeholder="Full name"
                   value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                  onValueChange={(v) => setNewUser({ ...newUser, name: v })}
+                  isRequired
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
-                <input
+                <Input
                   type="email"
-                  required
+                  label="Email"
+                  placeholder="user@company.com"
                   value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                  onValueChange={(v) => setNewUser({ ...newUser, email: v })}
+                  isRequired
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                <input
+                <Input
                   type="password"
-                  required
+                  label="Password"
+                  placeholder="••••••••"
                   value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                  onValueChange={(v) => setNewUser({ ...newUser, password: v })}
+                  isRequired
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:focus:border-slate-100"
+                <Select
+                  label="Role"
+                  selectedKeys={[newUser.role]}
+                  onSelectionChange={(keys) => setNewUser({ ...newUser, role: Array.from(keys)[0] })}
                 >
-                  <option value="hr">HR</option>
-                  <option value="candidate">Candidate</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  disabled={creating}
-                >
+                  <SelectItem key="hr">HR</SelectItem>
+                  <SelectItem key="admin">Admin</SelectItem>
+                </Select>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose} isDisabled={creating}>
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                  disabled={creating}
-                >
-                  {creating ? 'Creating...' : 'Create User'}
-                </button>
-              </div>
+                </Button>
+                <Button color="primary" type="submit" isLoading={creating}>
+                  Create User
+                </Button>
+              </ModalFooter>
             </form>
-          </div>
-        </div>
-      )}
+          )}
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
 };
