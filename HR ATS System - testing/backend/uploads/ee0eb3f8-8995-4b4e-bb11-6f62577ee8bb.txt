@@ -1,7 +1,0 @@
-John Doe
-john@example.com
-Phone: (555) 123-4567
-Python Developer
-Skills: Python, FastAPI, MongoDB
-5 years experience
-Bachelor in CS
