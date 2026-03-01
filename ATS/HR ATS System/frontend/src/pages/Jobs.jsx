@@ -138,7 +138,7 @@ export default function Jobs() {
            job.description?.toLowerCase().includes(query);
   });
 
-  const isHR = user?.role === 'hr' || user?.role === 'admin';
+  const isHR = user?.role === 'team_lead' || user?.role === 'recruiter' || user?.role === 'admin';
 
   if (loading) {
     return (

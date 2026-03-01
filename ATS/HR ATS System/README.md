@@ -20,15 +20,14 @@ A production-ready ATS with role-based access, resume analysis using AI (Gemini)
 
 ## Features
 
-- **Role-Based Access Control (RBAC):** Admin, HR, Candidate.
+- **Role-Based Access Control (RBAC):** Admin, Team Lead, Recruiter.
 - **Resume Parsing:** PDF and DOCX text extraction.
 - **AI Scoring:** 
     - Rule-based matching (Skills, Experience).
     - Semantic matching (Sentence Embeddings).
     - Weighted final score.
 - **Dashboards:**
-    - HR: Analytics, Job Management, Application Review.
-    - Candidate: Job Search, Application Status, Score View.
+    - Team Lead/Recruiter: Analytics, Job Management, Application Review.
     - Admin: User Management.
 
 ## Setup Instructions
@@ -90,8 +89,9 @@ A production-ready ATS with role-based access, resume analysis using AI (Gemini)
 
 ## Default Roles
 - Register a new user.
-- Select "Admin", "HR", or "Candidate" from the registration page.
-- Note: In a real production system, Admin/HR registration should be restricted. Here it is open for demonstration.
+- Select "Admin", "Team Lead", or "Recruiter" from the registration page.
+- Role Hierarchy: Admin → Team Lead → Recruiter
+- Note: In a real production system, Admin registration should be restricted. Here it is open for demonstration.
 
 ## AI Configuration
 To enable AI features, ensure you have a valid `GEMINI_API_KEY` in `backend/.env`.

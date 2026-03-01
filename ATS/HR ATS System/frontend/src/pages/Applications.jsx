@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -6,6 +6,7 @@ import { AppShell } from '../components/AppShell';
 import { ApplicationList } from '../components/applications/ApplicationList';
 import { ApplicationDetails } from '../components/applications/ApplicationDetails';
 import { ResumeViewer } from '../components/applications/ResumeViewer';
+import ReviewStepper from '../components/ReviewStepper';
 import { 
   Card, 
   CardBody,
@@ -37,7 +38,6 @@ import {
   Search, 
   Mail, 
   Phone, 
-  MapPin, 
   CheckCircle, 
   XCircle, 
   Clock,
@@ -46,7 +46,16 @@ import {
   LayoutGrid,
   Table as TableIcon,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Maximize2,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Linkedin,
+  Github,
+  GraduationCap,
+  Target,
+  AlertCircle
 } from 'lucide-react';
 
 const statusColorMap = {
@@ -67,24 +76,32 @@ export default function Applications() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+  const { isOpen: isResumeOpen, onOpen: onResumeOpen, onOpenChange: onResumeOpenChange } = useDisclosure();
   
   // Split view state
   const [isSplitView, setIsSplitView] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState(null);
+  
+  // Expandable rows state
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [resumePreviewApp, setResumePreviewApp] = useState(null);
   const [showList, setShowList] = useState(true);
   const [showDetails, setShowDetails] = useState(true);
+
+  const isRecruiter = user?.role === 'recruiter';
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/applications/');
+      const endpoint = isRecruiter ? '/applications/my-uploads' : '/applications/';
+      const response = await api.get(endpoint);
       setApplications(response.data);
     } catch (error) {
       addToast('Failed to fetch applications.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, isRecruiter]);
 
   useEffect(() => {
     fetchApplications();
@@ -116,6 +133,25 @@ export default function Applications() {
     onOpen();
   };
 
+  // Toggle row expansion
+  const toggleRowExpansion = (id) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Open resume preview for table view
+  const handleResumePreview = (app) => {
+    setResumePreviewApp(app);
+    onResumeOpen();
+  };
+
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
       (app.candidate_name_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
@@ -125,14 +161,7 @@ export default function Applications() {
     return matchesSearch && matchesStatus;
   });
 
-  const isHR = user?.role === 'hr' || user?.role === 'admin';
-
-  // Stats
-  const stats = {
-    total: applications.length,
-    pending: applications.filter(a => ['Applied', 'Under Review'].includes(a.status)).length,
-    shortlisted: applications.filter(a => a.status === 'Shortlisted').length,
-  };
+  const isHR = user?.role === 'team_lead' || user?.role === 'recruiter' || user?.role === 'admin';
 
   if (loading) {
     return (
@@ -148,26 +177,14 @@ export default function Applications() {
     <AppShell>
       <div className="flex flex-col gap-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-default-900">Applications</h1>
-          <p className="text-default-600">Review and manage candidate applications</p>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="p-4 text-center border border-divider">
-            <p className="text-2xl font-bold text-default-900">{stats.total}</p>
-            <p className="text-xs text-default-500">Total</p>
-          </Card>
-          <Card className="p-4 text-center border border-divider">
-            <p className="text-2xl font-bold text-warning">{stats.pending}</p>
-            <p className="text-xs text-default-500">Pending</p>
-          </Card>
-          <Card className="p-4 text-center border border-divider">
-            <p className="text-2xl font-bold text-success">{stats.shortlisted}</p>
-            <p className="text-xs text-default-500">Shortlisted</p>
-          </Card>
-        </div>
+        {/* <div>
+          <h1 className="text-2xl font-bold tracking-tight text-default-900">
+            {isRecruiter ? 'My Applications' : 'Applications'}
+          </h1>
+          <p className="text-default-600">
+            {isRecruiter ? 'Review applications you have uploaded' : 'Review and manage candidate applications'}
+          </p>
+        </div> */}
 
         {/* Filters */}
         <Card className="p-4 border border-divider">
@@ -212,7 +229,7 @@ export default function Applications() {
         {/* Applications View */}
         {isSplitView ? (
           /* Split View - 3 Column Layout */
-          <div className="flex h-[calc(100vh-20rem)] w-full overflow-hidden rounded-xl border border-divider bg-background shadow-sm">
+          <div className="flex h-[calc(100vh-10rem)] w-full overflow-hidden rounded-xl border border-divider bg-background shadow-sm">
             
             {/* Column 1: Application List */}
             {showList && (
@@ -270,8 +287,16 @@ export default function Applications() {
             <div className="flex flex-1 flex-col bg-default-50">
               <div className="flex items-center justify-between p-4 border-b border-divider">
                  <h3 className="font-semibold text-default-900">Resume Preview</h3>
+                 {selectedApplication && (
+                   <Button isIconOnly size="sm" variant="light" onPress={onResumeOpen} title="Expand Resume">
+                     <Maximize2 size={18} />
+                   </Button>
+                 )}
               </div>
-              <div className="flex-1 overflow-hidden p-4">
+              <div 
+                className="flex-1 overflow-hidden p-4 cursor-pointer hover:bg-default-100 transition-colors" 
+                onClick={() => selectedApplication && onResumeOpen()}
+              >
                 <ResumeViewer application={selectedApplication} />
               </div>
             </div>
@@ -291,67 +316,252 @@ export default function Applications() {
             </CardBody>
           </Card>
         ) : (
-          <Card className="border border-divider">
-            <Table aria-label="Applications table" removeWrapper>
-              <TableHeader>
-                <TableColumn>CANDIDATE</TableColumn>
-                <TableColumn>JOB</TableColumn>
-                <TableColumn>STATUS</TableColumn>
-                <TableColumn>SCORE</TableColumn>
-                <TableColumn>DATE</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
-              </TableHeader>
-              <TableBody>
-                {filteredApplications.map((app) => (
-                  <TableRow key={app._id} className="cursor-pointer hover:bg-default-50" onClick={() => handleViewDetails(app)}>
-                    <TableCell>
-                      <User
-                        avatarProps={{ radius: "lg", src: `https://i.pravatar.cc/150?u=${app._id}` }}
-                        name={app.candidate_name_extracted || 'Unknown'}
-                        description={app.candidate_email_extracted}
-                        classNames={{
-                          name: "text-default-900",
-                          description: "text-default-500",
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm font-medium text-default-900">{app.job_title}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        size="sm" 
-                        variant="flat" 
-                        color={statusColorMap[app.status] || "default"}
-                      >
-                        {app.status}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Star size={14} className={app.match_score >= 80 ? 'text-success fill-success' : app.match_score >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
-                        <span className={`font-semibold ${
-                          app.match_score >= 80 ? 'text-success' : 
-                          app.match_score >= 60 ? 'text-warning' : 'text-danger'
-                        }`}>
-                          {app.match_score?.toFixed(0) || 0}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-default-500 text-sm">
-                        {new Date(app.applied_at).toLocaleDateString()}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="flat" color="primary" onPress={() => handleViewDetails(app)}>
-                        View
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <Card className="border border-divider overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-full">
+                <thead className="bg-default-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600 w-10"></th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Candidate</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Job</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Score</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Workflow</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-default-600">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-divider">
+                  {filteredApplications.map((app) => (
+                    <React.Fragment key={app._id}>
+                      {/* Main Row */}
+                      <tr className="hover:bg-default-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <Button 
+                            isIconOnly 
+                            size="sm" 
+                            variant="light" 
+                            onPress={() => toggleRowExpansion(app._id)}
+                          >
+                            {expandedRows.has(app._id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </Button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium text-default-900">{app.candidate_name_extracted || 'Unknown'}</p>
+                            <p className="text-xs text-default-500">{app.candidate_email || app.candidate_email_extracted}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm font-medium text-default-900">{app.job_title}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Chip 
+                            size="sm" 
+                            variant="flat" 
+                            color={statusColorMap[app.status] || "default"}
+                          >
+                            {app.status}
+                          </Chip>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Star size={14} className={app.final_score >= 80 ? 'text-success fill-success' : app.final_score >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
+                            <span className={`font-semibold ${
+                              app.final_score >= 80 ? 'text-success' : 
+                              app.final_score >= 60 ? 'text-warning' : 'text-danger'
+                            }`}>
+                              {app.final_score?.toFixed(0) || app.match_score?.toFixed(0) || 0}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <ReviewStepper 
+                            reviewStatus={app.review_status || 'pending'}
+                            reviewedAt={app.reviewed_at}
+                            sentForReviewAt={app.sent_for_review_at}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-default-500 text-sm">
+                            {new Date(app.applied_at).toLocaleDateString()}
+                          </span>
+                        </td>
+                      </tr>
+                      
+                      {/* Expanded Row */}
+                      {expandedRows.has(app._id) && (
+                        <tr className="bg-default-50">
+                          <td colSpan={7} className="px-6 py-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              {/* Contact Information */}
+                              <div className="space-y-3">
+                                <h4 className="font-semibold text-default-900 flex items-center gap-2">
+                                  <Mail size={16} className="text-primary" />
+                                  Contact Information
+                                </h4>
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex items-center gap-2 text-default-600">
+                                    <Mail size={14} /> {app.candidate_email || 'N/A'}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-default-600">
+                                    <Phone size={14} /> {app.candidate_phone || 'N/A'}
+                                  </div>
+                                  {app.candidate_linkedin && (
+                                    <a href={app.candidate_linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                                      <Linkedin size={14} /> LinkedIn Profile
+                                    </a>
+                                  )}
+                                  {app.candidate_github && (
+                                    <a href={app.candidate_github} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                                      <Github size={14} /> GitHub Profile
+                                    </a>
+                                  )}
+                                </div>
+                                
+                                {/* Education */}
+                                {app.candidate_education && app.candidate_education.length > 0 && (
+                                  <div className="mt-4">
+                                    <h4 className="font-semibold text-default-900 flex items-center gap-2 mb-2">
+                                      <GraduationCap size={16} className="text-primary" />
+                                      Education
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1">
+                                      {app.candidate_education.map((edu, idx) => (
+                                        <Chip key={idx} size="sm" variant="flat" color="secondary">{edu}</Chip>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Score Breakdown */}
+                              <div className="space-y-3">
+                                <h4 className="font-semibold text-default-900 flex items-center gap-2">
+                                  <Target size={16} className="text-primary" />
+                                  Score Breakdown
+                                </h4>
+                                {app.score_display ? (
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-default-600">Skills</span>
+                                      <span className="font-medium text-default-900">{app.score_display.skill}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-default-600">Experience</span>
+                                      <span className="font-medium text-default-900">{app.score_display.experience}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-default-600">Education</span>
+                                      <span className="font-medium text-default-900">{app.score_display.education}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-default-600">Semantic Match</span>
+                                      <span className="font-medium text-default-900">{app.score_display.semantic}</span>
+                                    </div>
+                                    <Divider className="my-2" />
+                                    <div className="flex justify-between">
+                                      <span className="font-semibold text-default-900">Total Score</span>
+                                      <span className={`font-bold ${
+                                        app.final_score >= 80 ? 'text-success' : 
+                                        app.final_score >= 60 ? 'text-warning' : 'text-danger'
+                                      }`}>{app.score_display.total}</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-default-500">Score breakdown not available</p>
+                                )}
+                              </div>
+                              
+                              {/* Skills */}
+                              <div className="space-y-3">
+                                {/* Matched Skills */}
+                                {app.matched_skills && app.matched_skills.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold text-default-900 flex items-center gap-2 mb-2">
+                                      <CheckCircle size={16} className="text-success" />
+                                      Matched Skills ({app.matched_skills.length})
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1">
+                                      {app.matched_skills.map((skill, idx) => (
+                                        <Chip key={idx} size="sm" variant="flat" color="success">{skill}</Chip>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Missing Skills */}
+                                {app.missing_skills && app.missing_skills.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold text-default-900 flex items-center gap-2 mb-2">
+                                      <AlertCircle size={16} className="text-danger" />
+                                      Missing Skills ({app.missing_skills.length})
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1">
+                                      {app.missing_skills.map((skill, idx) => (
+                                        <Chip key={idx} size="sm" variant="flat" color="danger">{skill}</Chip>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Candidate Skills */}
+                                {app.candidate_skills && app.candidate_skills.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold text-default-900 flex items-center gap-2 mb-2">
+                                      <Star size={16} className="text-primary" />
+                                      All Skills ({app.candidate_skills.length})
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1">
+                                      {app.candidate_skills.slice(0, 8).map((skill, idx) => (
+                                        <Chip key={idx} size="sm" variant="flat" color="primary">{skill}</Chip>
+                                      ))}
+                                      {app.candidate_skills.length > 8 && (
+                                        <Chip size="sm" variant="flat">+{app.candidate_skills.length - 8} more</Chip>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Actions Row */}
+                            <div className="mt-4 pt-4 border-t border-divider flex flex-wrap items-center justify-between gap-4">
+                              <div className="flex flex-wrap gap-2">
+                                {isHR && (
+                                  <>
+                                    <Button size="sm" color="success" variant="flat" startContent={<CheckCircle size={14} />}
+                                      onPress={() => handleUpdateStatus(app._id, 'Shortlisted')}>
+                                      Shortlist
+                                    </Button>
+                                    <Button size="sm" color="primary" variant="flat" startContent={<Clock size={14} />}
+                                      onPress={() => handleUpdateStatus(app._id, 'Interview Scheduled')}>
+                                      Schedule Interview
+                                    </Button>
+                                    <Button size="sm" color="danger" variant="flat" startContent={<XCircle size={14} />}
+                                      onPress={() => handleUpdateStatus(app._id, 'Rejected')}>
+                                      Reject
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                              <Button 
+                                size="sm" 
+                                color="secondary" 
+                                variant="flat" 
+                                startContent={<FileText size={14} />}
+                                onPress={() => handleResumePreview(app)}
+                              >
+                                Preview Resume
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         )}
           </>
@@ -364,16 +574,9 @@ export default function Applications() {
           {(onClose) => selectedApp && (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                <div className="flex items-center gap-4">
-                  <User
-                    avatarProps={{ radius: "lg", size: "lg", src: `https://i.pravatar.cc/150?u=${selectedApp._id}` }}
-                    name={selectedApp.candidate_name_extracted || 'Unknown Candidate'}
-                    description={selectedApp.job_title}
-                    classNames={{
-                      name: "text-xl font-bold text-default-900",
-                      description: "text-default-600",
-                    }}
-                  />
+                <div>
+                  <h2 className="text-xl font-bold text-default-900">{selectedApp.candidate_name_extracted || 'Unknown Candidate'}</h2>
+                  <p className="text-default-600">{selectedApp.job_title}</p>
                 </div>
               </ModalHeader>
               <ModalBody>
@@ -472,6 +675,39 @@ export default function Applications() {
                   </Button>
                 )}
               </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Resume Full Screen Modal */}
+      <Modal 
+        isOpen={isResumeOpen} 
+        onOpenChange={onResumeOpenChange} 
+        size="full"
+        backdrop="blur"
+        classNames={{
+          backdrop: "bg-black/50 backdrop-blur-md",
+          base: "bg-background",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-divider">
+                <div className="flex items-center gap-3">
+                  <FileText size={20} className="text-primary" />
+                  <span>Resume - {(resumePreviewApp || selectedApplication)?.candidate_name_extracted || 'Unknown Candidate'}</span>
+                </div>
+                <Button isIconOnly size="sm" variant="light" onPress={onClose}>
+                  <X size={20} />
+                </Button>
+              </ModalHeader>
+              <ModalBody className="p-0">
+                <div className="h-[calc(100vh-8rem)] w-full overflow-auto p-6">
+                  <ResumeViewer application={resumePreviewApp || selectedApplication} />
+                </div>
+              </ModalBody>
             </>
           )}
         </ModalContent>

@@ -41,7 +41,7 @@ async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
 async def upload_resume(
     job_id: str = Form(...),
     file: UploadFile = File(...),
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """HR/Admin uploads a resume for a job posting."""
@@ -148,6 +148,14 @@ async def upload_resume(
         "candidate_summary": parsed_candidate_data.get("summary", ""),
         "extraction_method": parsed_candidate_data.get("extraction_method", "regex"),
         
+        # Review workflow fields
+        "review_status": "pending",
+        "review_batch_id": None,
+        "sent_for_review_at": None,
+        "reviewed_at": None,
+        "reviewed_by": None,
+        "comments": [],
+        
         "status": ApplicationStatus.APPLIED.value,
         "applied_at": datetime.utcnow()
     }
@@ -159,7 +167,7 @@ async def upload_resume(
 
 @router.get("/", response_model=List[ApplicationInDB])
 async def list_applications(
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     cursor = db.applications.find()
@@ -172,7 +180,7 @@ async def list_applications(
 @router.get("/job/{job_id}", response_model=List[ApplicationInDB])
 async def get_job_applications(
     job_id: str,
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     cursor = db.applications.find({"job_id": job_id})
@@ -186,7 +194,7 @@ async def get_job_applications(
 async def update_application_status(
     application_id: str,
     status: ApplicationStatus = Body(..., embed=True),
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     app = await db.applications.find_one({"_id": ObjectId(application_id)})
@@ -206,3 +214,67 @@ async def update_application_status(
     # TODO: Send email notification
     
     return ApplicationInDB(**updated_app)
+
+
+@router.get("/my-uploads", response_model=List[ApplicationInDB])
+async def get_my_uploads(
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Get applications uploaded by the current logged-in user."""
+    cursor = db.applications.find({"uploaded_by": current_user.id})
+    apps = []
+    async for app in cursor:
+        app = await _enrich_application(app, db)
+        apps.append(ApplicationInDB(**app))
+    return apps
+
+
+@router.get("/my-stats")
+async def get_my_stats(
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Get upload statistics for the current logged-in user (today, week, month, year)."""
+    from datetime import timedelta
+    
+    now = datetime.utcnow()
+    
+    # Calculate time boundaries
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_week = start_of_today - timedelta(days=now.weekday())  # Monday
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Count uploads for each period
+    today_count = await db.applications.count_documents({
+        "uploaded_by": current_user.id,
+        "applied_at": {"$gte": start_of_today}
+    })
+    
+    week_count = await db.applications.count_documents({
+        "uploaded_by": current_user.id,
+        "applied_at": {"$gte": start_of_week}
+    })
+    
+    month_count = await db.applications.count_documents({
+        "uploaded_by": current_user.id,
+        "applied_at": {"$gte": start_of_month}
+    })
+    
+    year_count = await db.applications.count_documents({
+        "uploaded_by": current_user.id,
+        "applied_at": {"$gte": start_of_year}
+    })
+    
+    total_count = await db.applications.count_documents({
+        "uploaded_by": current_user.id
+    })
+    
+    return {
+        "today": today_count,
+        "week": week_count,
+        "month": month_count,
+        "year": year_count,
+        "total": total_count
+    }

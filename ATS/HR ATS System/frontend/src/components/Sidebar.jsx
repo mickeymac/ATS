@@ -9,20 +9,24 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  UserCircle2
+  UserCircle2,
+  Upload,
+  ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from './Logo';
 
 const menuItems = [
-  { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'hr'] },
-  { name: 'Jobs', icon: Briefcase, href: '/jobs', roles: ['admin', 'hr'] },
-  { name: 'Applications', icon: FileText, href: '/applications', roles: ['admin', 'hr'] },
-  { name: 'Analytics', icon: BarChart3, href: '/analytics', roles: ['admin', 'hr'] },
+  { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'Jobs', icon: Briefcase, href: '/jobs', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'Applications', icon: FileText, href: '/applications', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'My Uploads', icon: Upload, href: '/my-uploads', roles: ['recruiter'] },
+  { name: 'Review', icon: ClipboardCheck, href: '/review', roles: ['team_lead', 'admin'] },
+  { name: 'Analytics', icon: BarChart3, href: '/analytics', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Users', icon: Users, href: '/users', roles: ['admin'] },
-  { name: 'Profile', icon: UserCircle2, href: '/profile', roles: ['admin', 'hr'] },
-  { name: 'Settings', icon: Settings, href: '/settings', roles: ['admin', 'hr'] },
+  { name: 'Profile', icon: UserCircle2, href: '/profile', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'Settings', icon: Settings, href: '/settings', roles: ['admin', 'team_lead', 'recruiter'] },
 ];
 
 export function Sidebar({ isCollapsed = false, toggleSidebar }) {
@@ -35,7 +39,7 @@ export function Sidebar({ isCollapsed = false, toggleSidebar }) {
     navigate('/login');
   };
 
-  const userRole = user?.role || 'hr';
+  const userRole = user?.role || 'team_lead';
 
   return (
     <aside 

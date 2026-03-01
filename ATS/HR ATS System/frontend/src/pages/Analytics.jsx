@@ -68,7 +68,7 @@ const Analytics = () => {
     }
   }, [fetchStats, user?.role]);
 
-  if (user?.role === 'hr') return <HRDashboard />;
+  if (user?.role === 'team_lead' || user?.role === 'recruiter') return <HRDashboard />;
 
   if (user?.role !== 'admin') {
     return (

@@ -49,7 +49,7 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [creating, setCreating] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'hr' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'team_lead' });
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
   const fetchUsers = useCallback(async () => {
@@ -92,7 +92,7 @@ const Users = () => {
       await api.post('/users/', newUser);
       addToast('User created successfully.', 'success');
       onClose();
-      setNewUser({ name: '', email: '', password: '', role: 'hr' });
+      setNewUser({ name: '', email: '', password: '', role: 'team_lead' });
       fetchUsers();
     } catch (error) {
       addToast('Failed to create user.', 'error');
@@ -119,7 +119,8 @@ const Users = () => {
   const stats = {
     total: users.length,
     admins: users.filter(u => u.role === 'admin').length,
-    hr: users.filter(u => u.role === 'hr').length,
+    teamLeads: users.filter(u => u.role === 'team_lead').length,
+    recruiters: users.filter(u => u.role === 'recruiter').length,
   };
 
   if (currentUser?.role !== 'admin') {
@@ -155,7 +156,7 @@ const Users = () => {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <Card className="p-4 text-center border border-divider">
             <p className="text-2xl font-bold text-default-900">{stats.total}</p>
             <p className="text-xs text-default-500">Total Users</p>
@@ -165,8 +166,12 @@ const Users = () => {
             <p className="text-xs text-default-500">Admins</p>
           </Card>
           <Card className="p-4 text-center border border-divider">
-            <p className="text-2xl font-bold text-primary">{stats.hr}</p>
-            <p className="text-xs text-default-500">HR Staff</p>
+            <p className="text-2xl font-bold text-primary">{stats.teamLeads}</p>
+            <p className="text-xs text-default-500">Team Leads</p>
+          </Card>
+          <Card className="p-4 text-center border border-divider">
+            <p className="text-2xl font-bold text-success">{stats.recruiters}</p>
+            <p className="text-xs text-default-500">Recruiters</p>
           </Card>
         </div>
 
@@ -323,7 +328,8 @@ const Users = () => {
                   selectedKeys={[newUser.role]}
                   onSelectionChange={(keys) => setNewUser({ ...newUser, role: Array.from(keys)[0] })}
                 >
-                  <SelectItem key="hr">HR</SelectItem>
+                  <SelectItem key="team_lead">Team Lead</SelectItem>
+                  <SelectItem key="recruiter">Recruiter</SelectItem>
                   <SelectItem key="admin">Admin</SelectItem>
                 </Select>
               </ModalBody>

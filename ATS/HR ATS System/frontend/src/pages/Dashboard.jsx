@@ -15,13 +15,13 @@ const Dashboard = () => {
     );
   }
 
-  // Only admin and hr roles are supported
+  // Only admin and team_lead/recruiter roles are supported
   if (user.role === 'admin') {
     return <AdminDashboard />;
-  } else if (user.role === 'hr') {
+  } else if (user.role === 'team_lead' || user.role === 'recruiter') {
     return <HRDashboard />;
   } else {
-    // Redirect any other role (like candidate) to unauthorized
+    // Redirect any other role to unauthorized
     return <Navigate to="/unauthorized" replace />;
   }
 };

@@ -12,6 +12,21 @@ class ApplicationStatus(str, Enum):
     SELECTED = "Selected"
     REJECTED = "Rejected"
 
+class ReviewStatus(str, Enum):
+    """Review workflow status for Team Lead review process."""
+    PENDING = "pending"                # Fresh upload, not sent for review
+    SENT_FOR_REVIEW = "sent_for_review" # Recruiter sent to Team Lead
+    APPROVED = "approved"              # Team Lead approved
+    NOT_SELECTED = "not_selected"      # Team Lead did not select
+    
+class Comment(BaseModel):
+    """Comment added by user during review process."""
+    user_id: str
+    user_name: str
+    user_role: str
+    text: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 class SkillWeight(BaseModel):
     name: str
     weight: float
@@ -106,6 +121,14 @@ class ApplicationInDB(ApplicationCreate):
     candidate_certifications: List[str] = []
     candidate_summary: Optional[str] = None
     extraction_method: Optional[str] = None  # "llm" or "regex"
+    
+    # Review workflow fields
+    review_status: str = "pending"  # pending, sent_for_review, approved, not_selected
+    review_batch_id: Optional[str] = None  # Groups candidates sent together
+    sent_for_review_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None  # Team Lead user ID
+    comments: List[Comment] = []
     
     # Other fields
     ranking_position: Optional[int] = None

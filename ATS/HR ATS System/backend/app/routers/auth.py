@@ -85,13 +85,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncIOMot
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Reject candidate role logins - only HR and Admin allowed
-    if user.get("role") == "candidate":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Candidate accounts are no longer supported. Please contact HR.",
-        )
-    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     # We need to inject role into the token.
     # I'll rely on the updated security.py which I will write immediately.

@@ -54,10 +54,10 @@ if __name__ == "__main__":
     req = urllib.request.Request(
         url,
         data=json.dumps({
-            "name": "HR Auto",
-            "email": "hr.auto@example.com",
+            "name": "Team Lead Auto",
+            "email": "teamlead.auto@example.com",
             "password": "Passw0rd!",
-            "role": "hr"
+            "role": "team_lead"
         }).encode("utf-8"),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {admin_token}"},
         method="POST",

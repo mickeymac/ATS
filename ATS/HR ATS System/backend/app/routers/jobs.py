@@ -12,7 +12,7 @@ router = APIRouter()
 @router.post("/", response_model=JobInDB)
 async def create_job(
     job_in: JobCreate,
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     job_doc = job_in.dict()
@@ -48,15 +48,15 @@ async def read_job(job_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
 async def update_job(
     job_id: str,
     job_update: JobCreate,
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     job = await db.jobs.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # Optional: Check if HR owns the job
-    if current_user.role == UserRole.HR and job["created_by"] != current_user.id:
+    # Check if Team Lead or Recruiter owns the job
+    if current_user.role in [UserRole.TEAM_LEAD, UserRole.RECRUITER] and job["created_by"] != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this job")
 
     await db.jobs.update_one({"_id": ObjectId(job_id)}, {"$set": job_update.dict()})
@@ -68,14 +68,14 @@ async def update_job(
 @router.delete("/{job_id}")
 async def delete_job(
     job_id: str,
-    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.HR])),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     job = await db.jobs.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_user.role == UserRole.HR and job["created_by"] != current_user.id:
+    if current_user.role in [UserRole.TEAM_LEAD, UserRole.RECRUITER] and job["created_by"] != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this job")
         
     await db.jobs.delete_one({"_id": ObjectId(job_id)})

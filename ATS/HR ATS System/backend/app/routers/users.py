@@ -63,6 +63,22 @@ async def update_current_user(
     update_doc = {}
     if user_update.name is not None:
         update_doc["name"] = user_update.name
+    if user_update.email is not None:
+        # Check if email is already taken by another user
+        existing = await db.users.find_one({"email": user_update.email, "_id": {"$ne": ObjectId(current_user.id)}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        update_doc["email"] = user_update.email
+    if user_update.phone is not None:
+        update_doc["phone"] = user_update.phone
+    if user_update.department is not None:
+        update_doc["department"] = user_update.department
+    if user_update.bio is not None:
+        update_doc["bio"] = user_update.bio
+    if user_update.profile_image is not None:
+        update_doc["profile_image"] = user_update.profile_image
+    if user_update.team_lead is not None:
+        update_doc["team_lead"] = user_update.team_lead
     if user_update.password:
         update_doc["password_hash"] = get_password_hash(user_update.password)
 

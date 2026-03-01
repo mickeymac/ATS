@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { 
   Card, 
   CardBody, 
@@ -40,6 +41,7 @@ const statusColorMap = {
 };
 
 const HRDashboard = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState({ totalJobs: 0, totalApps: 0, shortlisted: 0, pending: 0 });
   const [recentApps, setRecentApps] = useState([]);
   const [chartData, setChartData] = useState([]);
@@ -53,12 +55,17 @@ const HRDashboard = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  const isRecruiter = user?.role === 'recruiter';
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
+      // Recruiters see only their own uploads, others see all
+      const appsEndpoint = isRecruiter ? '/applications/my-uploads' : '/applications/';
+      
       const [jobsRes, appsRes] = await Promise.all([
         api.get('/jobs/'),
-        api.get('/applications/')
+        api.get(appsEndpoint)
       ]);
 
       const jobsList = jobsRes.data;
@@ -94,7 +101,7 @@ const HRDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, isRecruiter]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

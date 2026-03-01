@@ -16,7 +16,7 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState(new Set(["hr"]));
+  const [role, setRole] = useState(new Set(["team_lead"]));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -114,7 +114,8 @@ export default function Register() {
                 trigger: "bg-default-100",
               }}
             >
-              <SelectItem key="hr">HR</SelectItem>
+              <SelectItem key="team_lead">Team Lead</SelectItem>
+              <SelectItem key="recruiter">Recruiter</SelectItem>
               <SelectItem key="admin">Admin</SelectItem>
             </Select>
 

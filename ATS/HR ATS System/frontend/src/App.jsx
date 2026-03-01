@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Landing from './pages/Landing';
 import Jobs from './pages/Jobs';
 import Applications from './pages/Applications';
+import MyUploads from './pages/MyUploads';
+import Review from './pages/Review';
 import Users from './pages/Users';
 import Analytics from './pages/Analytics';
 import Profile from './pages/Profile';
@@ -32,6 +34,8 @@ function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/jobs" element={<Jobs />} />
                   <Route path="/applications" element={<Applications />} />
+                  <Route path="/my-uploads" element={<MyUploads />} />
+                  <Route path="/review" element={<Review />} />
                   <Route path="/users" element={<Users />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/profile" element={<Profile />} />

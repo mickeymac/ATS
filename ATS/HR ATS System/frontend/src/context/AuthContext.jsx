@@ -13,22 +13,46 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        // Check if token is expired
-        if (decoded.exp * 1000 < Date.now()) {
-          logout();
-        } else {
-          setUser({ email: decoded.sub, role: decoded.role });
-        }
-      } catch {
-        logout();
-      }
+  const fetchUserProfile = async () => {
+    try {
+      const response = await api.get('/users/me');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch profile', error);
+      return null;
     }
-    setLoading(false);
+  };
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const decoded = jwtDecode(token);
+          // Check if token is expired
+          if (decoded.exp * 1000 < Date.now()) {
+            logout();
+          } else {
+            // Fetch full profile to get profile_image
+            const profile = await fetchUserProfile();
+            if (profile) {
+              setUser({ 
+                email: profile.email || decoded.sub, 
+                role: profile.role || decoded.role,
+                name: profile.name,
+                profile_image: profile.profile_image
+              });
+            } else {
+              setUser({ email: decoded.sub, role: decoded.role });
+            }
+          }
+        } catch {
+          logout();
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
   const login = async (email, password) => {
@@ -39,7 +63,18 @@ export const AuthProvider = ({ children }) => {
       const response = await api.post('/auth/login', params);
       const { access_token, role } = response.data;
       localStorage.setItem('token', access_token);
-      setUser({ email, role });
+      // Fetch profile to get full user data including profile_image
+      const profile = await fetchUserProfile();
+      if (profile) {
+        setUser({ 
+          email: profile.email || email, 
+          role: profile.role || role,
+          name: profile.name,
+          profile_image: profile.profile_image
+        });
+      } else {
+        setUser({ email, role });
+      }
       return true;
     } catch (error) {
       console.error('Login failed', error);
@@ -57,8 +92,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = (userData) => {
+    if (userData) {
+      setUser(prev => ({
+        ...prev,
+        email: userData.email || prev?.email,
+        name: userData.name || prev?.name,
+        role: userData.role || prev?.role,
+        profile_image: userData.profile_image || prev?.profile_image
+      }));
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

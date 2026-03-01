@@ -45,18 +45,18 @@ if __name__ == "__main__":
     admin_login = post_form("/auth/login", {"username": "admin@ats.local", "password": "Admin@12345"})
     admin_token = admin_login["access_token"]
     print("Admin login OK")
-    # Register HR user (unique email)
+    # Register Team Lead user (unique email)
     suffix = str(uuid.uuid4())[:8]
-    hr_email = f"hr.auto.{suffix}@example.com"
+    hr_email = f"teamlead.auto.{suffix}@example.com"
     registered = post_json(
         "/auth/register",
-        {"name": "HR Auto", "email": hr_email, "password": "Passw0rd!", "role": "hr"},
+        {"name": "Team Lead Auto", "email": hr_email, "password": "Passw0rd!", "role": "team_lead"},
     )
-    print("Registered HR user:", hr_email)
-    # HR login
+    print("Registered Team Lead user:", hr_email)
+    # Team Lead login
     hr_login = post_form("/auth/login", {"username": hr_email, "password": "Passw0rd!"})
     hr_token = hr_login["access_token"]
-    print("HR login OK")
+    print("Team Lead login OK")
     # Create Job
     job = post_json(
         "/jobs/",
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # Admin creates another user
     created_user = post_json(
         "/users/",
-        {"name": "HR Auto 2", "email": f"hr.auto2.{suffix}@example.com", "password": "Passw0rd!", "role": "hr"},
+        {"name": "Recruiter Auto", "email": f"recruiter.auto.{suffix}@example.com", "password": "Passw0rd!", "role": "recruiter"},
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     print("Admin created user:", created_user["email"])
