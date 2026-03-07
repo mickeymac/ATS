@@ -96,7 +96,7 @@ const HRDashboard = () => {
       ];
       setChartData(monthlyData);
 
-    } catch (error) {
+    } catch {
       addToast("Failed to load dashboard data.", "error");
     } finally {
       setLoading(false);

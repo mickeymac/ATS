@@ -96,7 +96,7 @@ export default function Applications() {
       const endpoint = isRecruiter ? '/applications/my-uploads' : '/applications/';
       const response = await api.get(endpoint);
       setApplications(response.data);
-    } catch (error) {
+    } catch {
       addToast('Failed to fetch applications.', 'error');
     } finally {
       setLoading(false);
@@ -115,7 +115,7 @@ export default function Applications() {
       ));
       addToast(`Application marked as ${newStatus}.`, 'success');
       onClose();
-    } catch (error) {
+    } catch {
       addToast('Failed to update status.', 'error');
     }
   };
@@ -128,7 +128,8 @@ export default function Applications() {
     setSelectedAppId(id);
   };
 
-  const handleViewDetails = (app) => {
+  // View details handler
+  const _handleViewDetails = (app) => {
     setSelectedApp(app);
     onOpen();
   };

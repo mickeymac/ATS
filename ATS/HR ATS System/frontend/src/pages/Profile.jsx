@@ -55,7 +55,7 @@ const Profile = () => {
         if (response.data.profile_image) {
           setImagePreview(response.data.profile_image);
         }
-      } catch (error) {
+      } catch {
         addToast('Failed to load profile.', 'error');
       }
     };
@@ -126,7 +126,7 @@ const Profile = () => {
         password: '',
         profile_image: response.data.profile_image || ''
       });
-    } catch (error) {
+    } catch {
       addToast('Failed to update profile.', 'error');
     } finally {
       setLoading(false);

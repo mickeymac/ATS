@@ -57,7 +57,7 @@ const Users = () => {
     try {
       const response = await api.get('/users/');
       setUsers(response.data);
-    } catch (error) {
+    } catch {
       addToast('Failed to fetch users.', 'error');
     } finally {
       setLoading(false);
@@ -80,7 +80,7 @@ const Users = () => {
       await api.delete(`/users/${id}`);
       setUsers(users.filter(u => u._id !== id));
       addToast('User deleted successfully.', 'success');
-    } catch (error) {
+    } catch {
       addToast('Failed to delete user.', 'error');
     }
   };
@@ -94,7 +94,7 @@ const Users = () => {
       onClose();
       setNewUser({ name: '', email: '', password: '', role: 'team_lead' });
       fetchUsers();
-    } catch (error) {
+    } catch {
       addToast('Failed to create user.', 'error');
     } finally {
       setCreating(false);
@@ -105,7 +105,7 @@ const Users = () => {
     try {
       await navigator.clipboard.writeText(email);
       addToast('Email copied to clipboard.', 'success');
-    } catch (error) {
+    } catch {
       addToast('Failed to copy email.', 'error');
     }
   };

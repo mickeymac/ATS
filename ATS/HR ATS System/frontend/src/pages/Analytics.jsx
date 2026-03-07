@@ -24,7 +24,7 @@ const StatsCard = ({ title, value, icon: Icon, color = 'primary', loading = fals
       <CardBody className="p-0">
         <div className="flex items-start justify-between">
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${colors[color]}`}>
-            <Icon className="h-6 w-6" />
+            {Icon && <Icon className="h-6 w-6" />}
           </div>
           <span className="flex items-center gap-1 text-xs font-medium text-success">
             <TrendingUp size={14} />

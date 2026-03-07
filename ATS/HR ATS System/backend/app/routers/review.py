@@ -10,8 +10,14 @@ import uuid
 
 router = APIRouter()
 
-# Default Team Lead ID (Kaushal)
-DEFAULT_TEAM_LEAD_ID = "69a1ec80811ca2c0ff289093"
+
+async def _get_all_team_lead_ids(db: AsyncIOMotorDatabase) -> list:
+    """Get all team lead user IDs from database."""
+    team_leads = []
+    cursor = db.users.find({"role": "team_lead"})
+    async for user in cursor:
+        team_leads.append(str(user["_id"]))
+    return team_leads
 
 
 async def _create_notification(
@@ -47,13 +53,16 @@ async def send_for_review(
     if not application_ids:
         raise HTTPException(status_code=400, detail="No applications selected")
     
+    # Get all team leads to notify
+    team_lead_ids = await _get_all_team_lead_ids(db)
+    
     # Create a review batch
     batch_id = str(uuid.uuid4())
     batch_doc = {
         "batch_id": batch_id,
         "recruiter_id": current_user.id,
         "recruiter_name": current_user.name or current_user.email,
-        "team_lead_id": DEFAULT_TEAM_LEAD_ID,
+        "team_lead_ids": team_lead_ids,  # Store all team lead IDs
         "application_ids": application_ids,
         "candidate_count": len(application_ids),
         "status": "pending",
@@ -75,20 +84,21 @@ async def send_for_review(
             }
         )
     
-    # Create notification for Team Lead
-    await _create_notification(
-        db,
-        DEFAULT_TEAM_LEAD_ID,
-        NotificationType.REVIEW_REQUEST,
-        "New Review Request",
-        f"{current_user.name or current_user.email} sent {len(application_ids)} candidate(s) for review",
-        {
-            "batch_id": batch_id,
-            "recruiter_id": current_user.id,
-            "recruiter_name": current_user.name or current_user.email,
-            "candidate_count": len(application_ids)
-        }
-    )
+    # Create notification for ALL Team Leads
+    for tl_id in team_lead_ids:
+        await _create_notification(
+            db,
+            tl_id,
+            NotificationType.REVIEW_REQUEST,
+            "New Review Request",
+            f"{current_user.name or current_user.email} sent {len(application_ids)} candidate(s) for review",
+            {
+                "batch_id": batch_id,
+                "recruiter_id": current_user.id,
+                "recruiter_name": current_user.name or current_user.email,
+                "candidate_count": len(application_ids)
+            }
+        )
     
     return {
         "success": True,
@@ -132,7 +142,11 @@ async def get_review_batches(
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """Get all review batches for Team Lead."""
-    cursor = db.review_batches.find({"team_lead_id": DEFAULT_TEAM_LEAD_ID})
+    # For admin, show all batches. For team lead, show batches where they are in team_lead_ids
+    if current_user.role == UserRole.ADMIN:
+        cursor = db.review_batches.find({})
+    else:
+        cursor = db.review_batches.find({"team_lead_ids": current_user.id})
     batches = []
     async for batch in cursor:
         batch["_id"] = str(batch["_id"])
@@ -312,13 +326,16 @@ async def resubmit_for_review(
         if app.get("review_status") != "not_selected":
             raise HTTPException(status_code=400, detail=f"Application {app_id} is not in 'not_selected' status")
     
+    # Get all team leads to notify
+    team_lead_ids = await _get_all_team_lead_ids(db)
+    
     # Create a new review batch
     batch_id = str(uuid.uuid4())
     batch_doc = {
         "batch_id": batch_id,
         "recruiter_id": current_user.id,
         "recruiter_name": current_user.name or current_user.email,
-        "team_lead_id": DEFAULT_TEAM_LEAD_ID,
+        "team_lead_ids": team_lead_ids,
         "application_ids": application_ids,
         "candidate_count": len(application_ids),
         "status": "pending",
@@ -342,21 +359,22 @@ async def resubmit_for_review(
             }
         )
     
-    # Notify Team Lead
-    await _create_notification(
-        db,
-        DEFAULT_TEAM_LEAD_ID,
-        NotificationType.REVIEW_REQUEST,
-        "Resubmission Request",
-        f"{current_user.name or current_user.email} re-submitted {len(application_ids)} candidate(s) for review",
-        {
-            "batch_id": batch_id,
-            "recruiter_id": current_user.id,
-            "recruiter_name": current_user.name or current_user.email,
-            "candidate_count": len(application_ids),
-            "is_resubmission": True
-        }
-    )
+    # Notify ALL Team Leads
+    for tl_id in team_lead_ids:
+        await _create_notification(
+            db,
+            tl_id,
+            NotificationType.REVIEW_REQUEST,
+            "Resubmission Request",
+            f"{current_user.name or current_user.email} re-submitted {len(application_ids)} candidate(s) for review",
+            {
+                "batch_id": batch_id,
+                "recruiter_id": current_user.id,
+                "recruiter_name": current_user.name or current_user.email,
+                "candidate_count": len(application_ids),
+                "is_resubmission": True
+            }
+        )
     
     return {
         "success": True,

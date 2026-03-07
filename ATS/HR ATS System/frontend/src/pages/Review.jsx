@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
 import ReviewStepper from '../components/ReviewStepper';
@@ -45,7 +44,6 @@ import {
 } from 'lucide-react';
 
 export default function Review() {
-  const { user } = useAuth();
   const { addToast } = useToast();
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
@@ -69,7 +67,7 @@ export default function Review() {
       // Filter only pending batches
       const pendingBatches = response.data.filter(b => b.status === 'pending');
       setBatches(pendingBatches);
-    } catch (error) {
+    } catch {
       addToast('Failed to fetch review batches.', 'error');
     } finally {
       setLoading(false);
@@ -148,7 +146,7 @@ export default function Review() {
       onConfirmOpenChange(false);
       handleBack();
       fetchBatches();
-    } catch (error) {
+    } catch {
       addToast('Failed to complete review', 'error');
     } finally {
       setSubmitting(false);
@@ -182,7 +180,7 @@ export default function Review() {
       const response = await api.get(`/review/batch/${selectedBatch.batch_id}/applications`);
       setBatchApplications(response.data.applications || []);
       onCommentOpenChange(false);
-    } catch (error) {
+    } catch {
       addToast('Failed to add comment', 'error');
     } finally {
       setAddingComment(false);

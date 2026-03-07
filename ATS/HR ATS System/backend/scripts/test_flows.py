@@ -42,7 +42,7 @@ def get(path, headers=None):
 if __name__ == "__main__":
     print("Health:", get("/"))
     # Admin login
-    admin_login = post_form("/auth/login", {"username": "admin@ats.local", "password": "Admin@12345"})
+    admin_login = post_form("/auth/login", {"username": "admin@ats.com", "password": "Admin@12345"})
     admin_token = admin_login["access_token"]
     print("Admin login OK")
     # Register Team Lead user (unique email)

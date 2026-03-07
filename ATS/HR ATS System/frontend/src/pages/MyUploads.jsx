@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
 import ReviewStepper from '../components/ReviewStepper';
@@ -63,14 +62,14 @@ const statusColorMap = {
   'Rejected': 'danger',
 };
 
-const reviewStatusColorMap = {
+const _reviewStatusColorMap = {
   'pending': 'default',
   'sent_for_review': 'warning',
   'approved': 'success',
   'not_selected': 'danger',
 };
 
-const reviewStatusLabelMap = {
+const _reviewStatusLabelMap = {
   'pending': 'Pending',
   'sent_for_review': 'Under Review',
   'approved': 'Approved',
@@ -78,7 +77,6 @@ const reviewStatusLabelMap = {
 };
 
 export default function MyUploads() {
-  const { user } = useAuth();
   const { addToast } = useToast();
   const [uploads, setUploads] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -86,7 +84,7 @@ export default function MyUploads() {
   const [loading, setLoading] = useState(true);
   const [sendingForReview, setSendingForReview] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
   const [filterJob, setFilterJob] = useState('all');
   const [filterDate, setFilterDate] = useState('');
@@ -110,7 +108,7 @@ export default function MyUploads() {
       setUploads(uploadsRes.data);
       setStats(statsRes.data);
       setJobs(jobsRes.data);
-    } catch (error) {
+    } catch {
       addToast('Failed to fetch your uploads.', 'error');
     } finally {
       setLoading(false);
@@ -262,7 +260,7 @@ export default function MyUploads() {
       addToast(`Sent ${selectedIds.size} candidate(s) for review`, 'success');
       setSelectedIds(new Set());
       fetchMyUploads();
-    } catch (error) {
+    } catch {
       addToast('Failed to send for review', 'error');
     } finally {
       setSendingForReview(false);
@@ -284,7 +282,7 @@ export default function MyUploads() {
       addToast(`Re-submitted ${selectedIds.size} candidate(s) for review`, 'success');
       setSelectedIds(new Set());
       fetchMyUploads();
-    } catch (error) {
+    } catch {
       addToast('Failed to resubmit', 'error');
     } finally {
       setSendingForReview(false);
@@ -308,7 +306,7 @@ export default function MyUploads() {
       await fetchMyUploads();
       // Switch to "Not Selected for Review" tab to show the rejected candidates
       setSelectedTab('not_selected');
-    } catch (error) {
+    } catch {
       addToast('Failed to reject candidates', 'error');
     } finally {
       setRejectingDirectly(false);
@@ -966,7 +964,7 @@ export default function MyUploads() {
           scrollBehavior="inside"
         >
           <ModalContent>
-            {(onClose) => (
+            {() => (
               <>
                 <ModalHeader>
                   Resume Preview - {selectedApp?.candidate_name_extracted}

@@ -46,8 +46,7 @@ const Settings = () => {
   const { 
     isOpen: isDeleteOpen, 
     onOpen: onDeleteOpen, 
-    onOpenChange: onDeleteOpenChange,
-    onClose: onDeleteClose 
+    onOpenChange: onDeleteOpenChange
   } = useDisclosure();
 
   const handlePasswordUpdate = async () => {
@@ -61,7 +60,7 @@ const Settings = () => {
       addToast('Password updated successfully.', 'success');
       setPasswordValue('');
       onPasswordClose();
-    } catch (error) {
+    } catch {
       addToast('Failed to update password.', 'error');
     } finally {
       setSavingPassword(false);
@@ -75,7 +74,7 @@ const Settings = () => {
       addToast('Account deleted.', 'success');
       logout();
       navigate('/');
-    } catch (error) {
+    } catch {
       addToast('Failed to delete account.', 'error');
     } finally {
       setDeleting(false);

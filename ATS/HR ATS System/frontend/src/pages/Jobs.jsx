@@ -61,7 +61,7 @@ export default function Jobs() {
     try {
       const response = await api.get('/jobs/');
       setJobs(response.data);
-    } catch (error) {
+    } catch {
       addToast('Failed to fetch jobs.', 'error');
     } finally {
       setLoading(false);
@@ -88,7 +88,7 @@ export default function Jobs() {
       onClose();
       resetForm();
       fetchJobs();
-    } catch (error) {
+    } catch {
       addToast('Failed to save job.', 'error');
     }
   };
@@ -99,7 +99,7 @@ export default function Jobs() {
       await api.delete(`/jobs/${id}`);
       addToast('Job deleted successfully!', 'success');
       fetchJobs();
-    } catch (error) {
+    } catch {
       addToast('Failed to delete job.', 'error');
     }
   };

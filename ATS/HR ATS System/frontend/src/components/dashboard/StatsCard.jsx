@@ -18,7 +18,7 @@ export function StatsCard({ title, value, trend, trendUp, icon: Icon, color = "p
             <h3 className="mt-2 text-3xl font-bold text-default-900">{value}</h3>
           </div>
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${colorMap[color]}`}>
-            <Icon size={24} />
+            {Icon && <Icon size={24} />}
           </div>
         </div>
         {trend && (

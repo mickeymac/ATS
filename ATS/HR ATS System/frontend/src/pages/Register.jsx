@@ -29,7 +29,7 @@ export default function Register() {
     try {
       await register(name, email, password, Array.from(role)[0]);
       navigate("/login");
-    } catch (err) {
+    } catch {
       setError("Registration failed. Email might be taken.");
     } finally {
       setLoading(false);
