@@ -1,4 +1,4 @@
-import { Bell, Search, Users, CheckCircle, MessageSquare, X } from 'lucide-react';
+import { Bell, Search, Users, CheckCircle, MessageSquare, X, Sun, Moon, Briefcase } from 'lucide-react';
 import { 
   Input, 
   Avatar, 
@@ -9,15 +9,18 @@ import {
   PopoverContent,
   Card,
   CardBody,
-  Spinner
+  Spinner,
+  Tooltip
 } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 export function Navbar() {
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState([]);
@@ -89,6 +92,8 @@ export function Navbar() {
       navigate('/review');
     } else if (notification.type === 'review_completed') {
       navigate('/my-uploads');
+    } else if (notification.type === 'job_created' || notification.type === 'job_assigned') {
+      navigate('/jobs');
     }
     handleMarkAsRead(notification._id);
     setIsPopoverOpen(false);
@@ -102,6 +107,10 @@ export function Navbar() {
         return <CheckCircle size={16} className="text-success" />;
       case 'comment_added':
         return <MessageSquare size={16} className="text-secondary" />;
+      case 'job_created':
+        return <Briefcase size={16} className="text-warning" />;
+      case 'job_assigned':
+        return <Briefcase size={16} className="text-success" />;
       default:
         return <Bell size={16} className="text-default-500" />;
     }
@@ -126,7 +135,19 @@ export function Navbar() {
         />
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        {/* Dark Mode Toggle */}
+        <Tooltip content={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+          <Button 
+            isIconOnly 
+            variant="light" 
+            className="text-default-600"
+            onPress={toggleTheme}
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </Button>
+        </Tooltip>
+
         <Popover 
           placement="bottom-end" 
           offset={20} 

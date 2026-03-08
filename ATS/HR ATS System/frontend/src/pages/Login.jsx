@@ -19,14 +19,16 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = await login(email, password);
+      if (result.success) {
         navigate('/dashboard');
       } else {
-        setError('Invalid email or password');
+        setError(result.error || 'Invalid email or password. Please try again.');
+        setPassword(''); // Clear password on error
       }
     } catch {
-      setError('Network error');
+      setError('Network error. Please check your connection and try again.');
+      setPassword('');
     } finally {
       setIsLoading(false);
     }
@@ -42,6 +44,11 @@ export default function Login() {
         </CardHeader>
         <CardBody className="px-8 py-8">
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            {error && (
+              <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
             <Input
               label="Email"
               placeholder="Enter your email"
@@ -61,7 +68,6 @@ export default function Login() {
               onValueChange={setPassword}
               isRequired
               isInvalid={!!error}
-              errorMessage={error}
             />
             <div className="flex justify-between items-center text-xs">
               <Link href="#" size="sm" className="text-default-500">Forgot password?</Link>
@@ -73,7 +79,7 @@ export default function Login() {
               className="w-full font-semibold"
               isLoading={isLoading}
             >
-              Sign In
+              {error ? 'Retry' : 'Sign In'}
             </Button>
             
             <p className="text-center text-sm text-default-500">
@@ -82,12 +88,6 @@ export default function Login() {
                 Sign up
               </RouterLink>
             </p>
-            
-            <div className="mt-4 rounded-lg bg-default-100 p-3 text-xs text-default-500">
-              <p className="font-semibold mb-1">Demo Credentials:</p>
-              <p>Email: admin@tecnolegacy.com</p>
-              <p>Password: admin</p>
-            </div>
           </form>
         </CardBody>
       </Card>

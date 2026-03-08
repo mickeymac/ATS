@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/api';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { 
   Card, 
   CardBody,
@@ -83,9 +85,10 @@ const Settings = () => {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
         {/* Page Header */}
-        <div>
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-default-900">Settings</h1>
           <p className="text-default-600">Manage your account preferences</p>
         </div>

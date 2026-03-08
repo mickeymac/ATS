@@ -48,7 +48,29 @@ class JobCreate(JobBase):
 class JobInDB(JobBase):
     id: str = Field(alias="_id")
     created_by: str # User ID of HR/Admin
+    created_by_name: Optional[str] = None  # Creator name for display
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    is_active: bool = True  # Job activation status
+    status_changed_by: Optional[str] = None  # User ID who changed active status
+    status_changed_by_name: Optional[str] = None  # User name who changed status
+    status_changed_at: Optional[datetime] = None  # When status was changed
+    assigned_team_lead_id: Optional[str] = None  # Team Lead assigned to this job
+    assigned_recruiter_ids: List[str] = []  # Recruiters assigned to this job
+
+class JobUpdate(BaseModel):
+    """Schema for updating job fields."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    type: Optional[str] = None
+    salary: Optional[str] = None
+    required_skills: Optional[List[str]] = None
+    weighted_skills: Optional[List[SkillWeight]] = None
+    experience_required: Optional[int] = None
+    education_required: Optional[str] = None
+    is_active: Optional[bool] = None
+    assigned_team_lead_id: Optional[str] = None
+    assigned_recruiter_ids: Optional[List[str]] = None
 
 class ApplicationBase(BaseModel):
     job_id: str
@@ -121,6 +143,9 @@ class ApplicationInDB(ApplicationCreate):
     candidate_certifications: List[str] = []
     candidate_summary: Optional[str] = None
     extraction_method: Optional[str] = None  # "llm" or "regex"
+    
+    # File hash for duplicate detection
+    file_hash: Optional[str] = None
     
     # Review workflow fields
     review_status: str = "pending"  # pending, sent_for_review, approved, not_selected

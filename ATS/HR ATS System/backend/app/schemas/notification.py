@@ -9,6 +9,8 @@ class NotificationType(str, Enum):
     REVIEW_REQUEST = "review_request"       # Recruiter sent candidates for review
     REVIEW_COMPLETED = "review_completed"   # Team Lead completed review
     COMMENT_ADDED = "comment_added"         # Someone added a comment
+    JOB_CREATED = "job_created"             # Team Lead created a new job
+    JOB_ASSIGNED = "job_assigned"           # User assigned to a job
 
 
 class NotificationBase(BaseModel):

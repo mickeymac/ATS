@@ -33,17 +33,18 @@ export const AuthProvider = ({ children }) => {
           if (decoded.exp * 1000 < Date.now()) {
             logout();
           } else {
-            // Fetch full profile to get profile_image
+            // Fetch full profile to get profile_image and permissions
             const profile = await fetchUserProfile();
             if (profile) {
               setUser({ 
                 email: profile.email || decoded.sub, 
                 role: profile.role || decoded.role,
                 name: profile.name,
-                profile_image: profile.profile_image
+                profile_image: profile.profile_image,
+                permissions: profile.permissions || {}
               });
             } else {
-              setUser({ email: decoded.sub, role: decoded.role });
+              setUser({ email: decoded.sub, role: decoded.role, permissions: {} });
             }
           }
         } catch {
@@ -63,22 +64,24 @@ export const AuthProvider = ({ children }) => {
       const response = await api.post('/auth/login', params);
       const { access_token, role } = response.data;
       localStorage.setItem('token', access_token);
-      // Fetch profile to get full user data including profile_image
+      // Fetch profile to get full user data including profile_image and permissions
       const profile = await fetchUserProfile();
       if (profile) {
         setUser({ 
           email: profile.email || email, 
           role: profile.role || role,
           name: profile.name,
-          profile_image: profile.profile_image
+          profile_image: profile.profile_image,
+          permissions: profile.permissions || {}
         });
       } else {
-        setUser({ email, role });
+        setUser({ email, role, permissions: {} });
       }
-      return true;
+      return { success: true };
     } catch (error) {
       console.error('Login failed', error);
-      return false;
+      const errorMessage = error.response?.data?.detail || 'Network error. Please try again.';
+      return { success: false, error: errorMessage };
     }
   };
 
@@ -99,13 +102,22 @@ export const AuthProvider = ({ children }) => {
         email: userData.email || prev?.email,
         name: userData.name || prev?.name,
         role: userData.role || prev?.role,
-        profile_image: userData.profile_image || prev?.profile_image
+        profile_image: userData.profile_image || prev?.profile_image,
+        permissions: userData.permissions || prev?.permissions || {}
       }));
     }
   };
 
+  // Helper function to check if user has a specific permission
+  const hasPermission = (permission) => {
+    if (!user) return false;
+    // Admin always has all permissions
+    if (user.role === 'admin') return true;
+    return user.permissions?.[permission] === true;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

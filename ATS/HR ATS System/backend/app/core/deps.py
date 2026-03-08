@@ -58,3 +58,31 @@ def check_role(required_roles: list[UserRole]):
             )
         return current_user
     return role_checker
+
+def check_permission(permission: str):
+    """
+    Permission-based access control dependency.
+    Checks if the current user has the specified permission.
+    """
+    def permission_checker(current_user: UserInDB = Depends(get_current_active_user)):
+        if not current_user.has_permission(permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing required permission: {permission}"
+            )
+        return current_user
+    return permission_checker
+
+def check_any_permission(permissions: list[str]):
+    """
+    Check if user has at least one of the specified permissions.
+    """
+    def permission_checker(current_user: UserInDB = Depends(get_current_active_user)):
+        for permission in permissions:
+            if current_user.has_permission(permission):
+                return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing required permission: one of {permissions}"
+        )
+    return permission_checker

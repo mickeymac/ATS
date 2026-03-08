@@ -11,7 +11,8 @@ import {
   ChevronRight,
   UserCircle2,
   Upload,
-  ClipboardCheck
+  ClipboardCheck,
+  Shield
 } from 'lucide-react';
 import { cn } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
@@ -23,8 +24,9 @@ const menuItems = [
   { name: 'Applications', icon: FileText, href: '/applications', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'My Uploads', icon: Upload, href: '/my-uploads', roles: ['recruiter'] },
   { name: 'Review', icon: ClipboardCheck, href: '/review', roles: ['team_lead', 'admin'] },
-  { name: 'Analytics', icon: BarChart3, href: '/analytics', roles: ['admin', 'team_lead', 'recruiter'] },
-  { name: 'Users', icon: Users, href: '/users', roles: ['admin'] },
+  { name: 'Analytics', icon: BarChart3, href: '/analytics', roles: ['admin', 'team_lead', 'recruiter'], permission: 'can_export_data' },
+  { name: 'Users', icon: Users, href: '/users', roles: ['admin'], permission: 'can_manage_users' },
+  { name: 'Permissions', icon: Shield, href: '/permissions', roles: ['admin'], permission: 'can_manage_permissions' },
   { name: 'Profile', icon: UserCircle2, href: '/profile', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Settings', icon: Settings, href: '/settings', roles: ['admin', 'team_lead', 'recruiter'] },
 ];
@@ -32,7 +34,7 @@ const menuItems = [
 export function Sidebar({ isCollapsed = false, toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -40,6 +42,15 @@ export function Sidebar({ isCollapsed = false, toggleSidebar }) {
   };
 
   const userRole = user?.role || 'team_lead';
+
+  // Filter menu items by role and permission
+  const visibleMenuItems = menuItems.filter(item => {
+    // First check role
+    if (!item.roles.includes(userRole)) return false;
+    // Then check permission if required
+    if (item.permission && !hasPermission(item.permission)) return false;
+    return true;
+  });
 
   return (
     <aside 
@@ -53,7 +64,7 @@ export function Sidebar({ isCollapsed = false, toggleSidebar }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-2">
-        {menuItems.filter(item => item.roles.includes(userRole)).map((item) => {
+        {visibleMenuItems.map((item) => {
           const isActive = location.pathname === item.href || (item.href !== '/dashboard' && location.pathname?.startsWith(item.href));
           return (
             <Link

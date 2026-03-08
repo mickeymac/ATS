@@ -3,6 +3,9 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { TableSkeleton } from '../components/SkeletonLoaders';
+import { exportToCSV, formatLastUpdated } from '../utils/export';
 import { ApplicationList } from '../components/applications/ApplicationList';
 import { ApplicationDetails } from '../components/applications/ApplicationDetails';
 import { ResumeViewer } from '../components/applications/ResumeViewer';
@@ -29,9 +32,9 @@ import {
   Select,
   SelectItem,
   Progress,
-  Spinner,
   Divider,
-  Switch
+  Switch,
+  Tooltip
 } from '@nextui-org/react';
 import { 
   FileText, 
@@ -55,7 +58,8 @@ import {
   Github,
   GraduationCap,
   Target,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 const statusColorMap = {
@@ -75,6 +79,7 @@ export default function Applications() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
   const { isOpen: isResumeOpen, onOpen: onResumeOpen, onOpenChange: onResumeOpenChange } = useDisclosure();
   
@@ -95,7 +100,10 @@ export default function Applications() {
     try {
       const endpoint = isRecruiter ? '/applications/my-uploads' : '/applications/';
       const response = await api.get(endpoint);
-      setApplications(response.data);
+      // Handle paginated response format
+      const data = response.data;
+      setApplications(data.items || data);
+      setLastUpdated(new Date());
     } catch {
       addToast('Failed to fetch applications.', 'error');
     } finally {
@@ -156,19 +164,38 @@ export default function Applications() {
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
       (app.candidate_name_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-      (app.candidate_email_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (app.candidate_email?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (app.job_title?.toLowerCase().includes(searchQuery.toLowerCase()) || false);
     const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  // Export applications to CSV
+  const handleExportApplications = () => {
+    const columns = [
+      { key: 'candidate_name_extracted', label: 'Candidate Name' },
+      { key: 'candidate_email', label: 'Email' },
+      { key: 'job_title', label: 'Job Title' },
+      { key: 'status', label: 'Status' },
+      { key: 'fit_score', label: 'Fit Score' },
+      { key: 'created_at', label: 'Applied At' }
+    ];
+    exportToCSV(filteredApplications, 'applications', columns);
+    addToast('Applications exported successfully.', 'success');
+  };
 
   const isHR = user?.role === 'team_lead' || user?.role === 'recruiter' || user?.role === 'admin';
 
   if (loading) {
     return (
       <AppShell>
-        <div className="flex h-96 items-center justify-center">
-          <Spinner size="lg" label="Loading applications..." />
+        <Breadcrumbs />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">Applications</h1>
+            <p className="text-default-600">Loading applications...</p>
+          </div>
+          <TableSkeleton rows={8} columns={5} />
         </div>
       </AppShell>
     );
@@ -176,16 +203,36 @@ export default function Applications() {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
         {/* Page Header */}
-        {/* <div>
-          <h1 className="text-2xl font-bold tracking-tight text-default-900">
-            {isRecruiter ? 'My Applications' : 'Applications'}
-          </h1>
-          <p className="text-default-600">
-            {isRecruiter ? 'Review applications you have uploaded' : 'Review and manage candidate applications'}
-          </p>
-        </div> */}
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">
+              {isRecruiter ? 'My Applications' : 'Applications'}
+            </h1>
+            <p className="text-default-600">
+              {isRecruiter ? 'Review applications you have uploaded' : 'Review and manage candidate applications'}
+            </p>
+            {lastUpdated && (
+              <p className="text-xs text-default-400">Last updated: {formatLastUpdated(lastUpdated)}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Tooltip content="Refresh">
+              <Button isIconOnly variant="flat" onPress={fetchApplications}>
+                <RefreshCw size={18} />
+              </Button>
+            </Tooltip>
+            {filteredApplications.length > 0 && (
+              <Tooltip content="Export to CSV">
+                <Button isIconOnly variant="flat" onPress={handleExportApplications}>
+                  <Download size={18} />
+                </Button>
+              </Tooltip>
+            )}
+          </div>
+        </div>
 
         {/* Filters */}
         <Card className="p-4 border border-divider">
@@ -588,13 +635,13 @@ export default function Applications() {
                       <h4 className="font-semibold text-default-900">Contact Information</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2 text-default-600">
-                          <Mail size={14} /> {selectedApp.candidate_email_extracted || 'N/A'}
+                          <Mail size={14} /> {selectedApp.candidate_email || 'N/A'}
                         </div>
                         <div className="flex items-center gap-2 text-default-600">
-                          <Phone size={14} /> {selectedApp.candidate_phone_extracted || 'N/A'}
+                          <Phone size={14} /> {selectedApp.candidate_phone || 'N/A'}
                         </div>
                         <div className="flex items-center gap-2 text-default-600">
-                          <MapPin size={14} /> {selectedApp.candidate_location_extracted || 'N/A'}
+                          <MapPin size={14} /> {selectedApp.candidate_location || 'Remote'}
                         </div>
                       </div>
                     </CardBody>

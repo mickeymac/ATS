@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
     
-    ADMIN_EMAIL: str = "admin@ats.com"
-    ADMIN_PASSWORD: str = "Admin@12345"
+    # Admin credentials from environment variables
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "admin@ats.com")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin@12345")
     
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DB_NAME: str = os.getenv("DB_NAME", "hr_ats")

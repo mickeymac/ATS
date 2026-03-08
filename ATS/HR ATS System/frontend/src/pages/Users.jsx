@@ -3,6 +3,10 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { TableSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
+import { exportToCSV, formatLastUpdated } from '../utils/export';
 import { 
   Card, 
   CardBody,
@@ -28,6 +32,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
+  Tooltip,
   Skeleton
 } from '@nextui-org/react';
 import { 
@@ -39,7 +44,9 @@ import {
   ShieldCheck, 
   Shield, 
   ShieldAlert,
-  MoreVertical
+  MoreVertical,
+  RefreshCw,
+  Download
 } from 'lucide-react';
 
 const Users = () => {
@@ -50,13 +57,17 @@ const Users = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'team_lead' });
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.get('/users/');
       setUsers(response.data);
+      setLastUpdated(new Date());
     } catch {
       addToast('Failed to fetch users.', 'error');
     } finally {
@@ -70,19 +81,51 @@ const Users = () => {
     }
   }, [fetchUsers, currentUser?.role]);
 
-  const handleDeleteUser = async (id) => {
-    if (id === currentUser?._id) {
+  const openDeleteDialog = (user) => {
+    if (user._id === currentUser?._id) {
       addToast("You cannot delete your own account.", "error");
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    setUserToDelete(user);
+    onDeleteOpen();
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
     try {
-      await api.delete(`/users/${id}`);
-      setUsers(users.filter(u => u._id !== id));
+      await api.delete(`/users/${userToDelete._id}`);
+      setUsers(users.filter(u => u._id !== userToDelete._id));
       addToast('User deleted successfully.', 'success');
+      onDeleteClose();
+      setUserToDelete(null);
     } catch {
       addToast('Failed to delete user.', 'error');
     }
+  };
+
+  const handleCopyEmail = async (email) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      addToast('Email copied to clipboard.', 'success');
+    } catch {
+      addToast('Failed to copy email.', 'error');
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.role?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleExportUsers = () => {
+    const columns = [
+      { key: 'name', label: 'Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'role', label: 'Role' },
+      { key: 'created_at', label: 'Created At' }
+    ];
+    exportToCSV(filteredUsers, 'users', columns);
+    addToast('Users exported successfully.', 'success');
   };
 
   const handleCreateUser = async (e) => {
@@ -100,20 +143,6 @@ const Users = () => {
       setCreating(false);
     }
   };
-
-  const handleCopyEmail = async (email) => {
-    try {
-      await navigator.clipboard.writeText(email);
-      addToast('Email copied to clipboard.', 'success');
-    } catch {
-      addToast('Failed to copy email.', 'error');
-    }
-  };
-
-  const filteredUsers = users.filter(u => 
-    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.role?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   // Stats
   const stats = {
@@ -139,20 +168,38 @@ const Users = () => {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
         {/* Page Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold tracking-tight text-default-900">Users</h1>
             <p className="text-default-600">{users.length} registered users</p>
+            {lastUpdated && (
+              <p className="text-xs text-default-400">Last updated: {formatLastUpdated(lastUpdated)}</p>
+            )}
           </div>
-          <Button 
-            color="primary" 
-            startContent={<UserPlus size={18} />}
-            onPress={onOpen}
-          >
-            Add User
-          </Button>
+          <div className="flex items-center gap-2">
+            <Tooltip content="Refresh">
+              <Button isIconOnly variant="flat" onPress={fetchUsers}>
+                <RefreshCw size={18} />
+              </Button>
+            </Tooltip>
+            {filteredUsers.length > 0 && (
+              <Tooltip content="Export to CSV">
+                <Button isIconOnly variant="flat" onPress={handleExportUsers}>
+                  <Download size={18} />
+                </Button>
+              </Tooltip>
+            )}
+            <Button 
+              color="primary" 
+              startContent={<UserPlus size={18} />}
+              onPress={onOpen}
+            >
+              Add User
+            </Button>
+          </div>
         </div>
 
         {/* Quick Stats */}
@@ -275,7 +322,7 @@ const Users = () => {
                             color="danger"
                             className={u._id === currentUser?._id ? 'hidden' : ''}
                             startContent={<Trash2 size={16} />}
-                            onPress={() => handleDeleteUser(u._id)}
+                            onPress={() => openDeleteDialog(u)}
                           >
                             Delete User
                           </DropdownItem>
@@ -345,6 +392,17 @@ const Users = () => {
           )}
         </ModalContent>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isDeleteOpen}
+        onClose={onDeleteClose}
+        onConfirm={handleDeleteUser}
+        title="Delete User"
+        message={`Are you sure you want to delete "${userToDelete?.email}"? This action cannot be undone.`}
+        confirmText="Delete"
+        confirmColor="danger"
+      />
     </AppShell>
   );
 };

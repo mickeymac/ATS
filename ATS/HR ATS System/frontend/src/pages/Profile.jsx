@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { ProfileSkeleton } from '../components/SkeletonLoaders';
 import { 
   Card, 
   CardBody,
@@ -79,6 +81,22 @@ const Profile = () => {
 
   if (!user) return null;
 
+  // Show skeleton while loading profile
+  if (!profile) {
+    return (
+      <AppShell>
+        <Breadcrumbs />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">My Profile</h1>
+            <p className="text-default-600">Loading your profile...</p>
+          </div>
+          <ProfileSkeleton />
+        </div>
+      </AppShell>
+    );
+  }
+
   const defaultDepartment = user.role === 'team_lead' ? 'Recruitment - Team Lead' : user.role === 'recruiter' ? 'Recruitment' : user.role === 'admin' ? 'Operations' : 'Engineering';
   const defaultBio = `Experienced professional with a background in ${user.role === 'team_lead' ? 'talent acquisition and team leadership' : user.role === 'recruiter' ? 'talent acquisition and recruitment' : user.role === 'admin' ? 'systems administration and operational excellence' : 'software development and technical problem solving'}. Passionate about building efficient teams and leveraging AI to improve workplace productivity.`;
 
@@ -135,8 +153,9 @@ const Profile = () => {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
-        <div>
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-default-900">My Profile</h1>
           <p className="text-default-600">Manage your personal information and account preferences.</p>
         </div>

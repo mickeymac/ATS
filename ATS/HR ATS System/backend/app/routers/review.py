@@ -20,6 +20,14 @@ async def _get_all_team_lead_ids(db: AsyncIOMotorDatabase) -> list:
     return team_leads
 
 
+async def _get_recruiter_team_lead_id(db: AsyncIOMotorDatabase, recruiter_id: str) -> Optional[str]:
+    """Get the team lead ID assigned to a specific recruiter."""
+    recruiter = await db.users.find_one({"_id": ObjectId(recruiter_id)})
+    if recruiter and recruiter.get("team_lead_id"):
+        return recruiter.get("team_lead_id")
+    return None
+
+
 async def _create_notification(
     db: AsyncIOMotorDatabase,
     user_id: str,
@@ -47,14 +55,42 @@ async def send_for_review(
     current_user: UserInDB = Depends(check_role([UserRole.RECRUITER, UserRole.ADMIN])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    """Recruiter sends selected applications to Team Lead for review."""
+    """Recruiter sends selected applications to their assigned Team Lead for review."""
     print(f"Received application_ids for review: {application_ids}")
     
     if not application_ids:
         raise HTTPException(status_code=400, detail="No applications selected")
     
-    # Get all team leads to notify
-    team_lead_ids = await _get_all_team_lead_ids(db)
+    # Get the recruiter's assigned team lead, or fall back to all team leads
+    team_lead_ids = []
+    
+    if current_user.role == UserRole.RECRUITER:
+        # First check if recruiter has an assigned team lead
+        assigned_team_lead_id = await _get_recruiter_team_lead_id(db, current_user.id)
+        if assigned_team_lead_id:
+            team_lead_ids = [assigned_team_lead_id]
+        else:
+            # Fall back to all team leads if no assignment
+            team_lead_ids = await _get_all_team_lead_ids(db)
+    else:
+        # Admin can send to all team leads
+        team_lead_ids = await _get_all_team_lead_ids(db)
+    
+    if not team_lead_ids:
+        raise HTTPException(status_code=400, detail="No team leads available for review")
+    
+    # Get job titles from applications
+    job_titles = set()
+    for app_id in application_ids:
+        try:
+            if ObjectId.is_valid(app_id):
+                app = await db.applications.find_one({"_id": ObjectId(app_id)})
+                if app and app.get("job_id"):
+                    job = await db.jobs.find_one({"_id": ObjectId(app["job_id"])})
+                    if job:
+                        job_titles.add(job.get("title", "Unknown"))
+        except Exception:
+            pass
     
     # Create a review batch
     batch_id = str(uuid.uuid4())
@@ -62,9 +98,10 @@ async def send_for_review(
         "batch_id": batch_id,
         "recruiter_id": current_user.id,
         "recruiter_name": current_user.name or current_user.email,
-        "team_lead_ids": team_lead_ids,  # Store all team lead IDs
+        "team_lead_ids": team_lead_ids,  # Store team lead IDs
         "application_ids": application_ids,
         "candidate_count": len(application_ids),
+        "job_titles": list(job_titles),
         "status": "pending",
         "created_at": datetime.utcnow()
     }
@@ -261,8 +298,12 @@ async def complete_review(
             "$set": {
                 "status": "completed",
                 "completed_at": datetime.utcnow(),
+                "completed_by": current_user.id,
+                "completed_by_name": current_user.name or current_user.email,
                 "approved_count": len(approved_ids),
-                "not_selected_count": len(not_selected_ids)
+                "not_selected_count": len(not_selected_ids),
+                "approved_application_ids": approved_ids,
+                "not_selected_application_ids": not_selected_ids
             }
         }
     )
@@ -329,6 +370,19 @@ async def resubmit_for_review(
     # Get all team leads to notify
     team_lead_ids = await _get_all_team_lead_ids(db)
     
+    # Get job titles from applications
+    job_titles = set()
+    for app_id in application_ids:
+        try:
+            if ObjectId.is_valid(app_id):
+                app = await db.applications.find_one({"_id": ObjectId(app_id)})
+                if app and app.get("job_id"):
+                    job = await db.jobs.find_one({"_id": ObjectId(app["job_id"])})
+                    if job:
+                        job_titles.add(job.get("title", "Unknown"))
+        except Exception:
+            pass
+    
     # Create a new review batch
     batch_id = str(uuid.uuid4())
     batch_doc = {
@@ -338,6 +392,7 @@ async def resubmit_for_review(
         "team_lead_ids": team_lead_ids,
         "application_ids": application_ids,
         "candidate_count": len(application_ids),
+        "job_titles": list(job_titles),
         "status": "pending",
         "is_resubmission": True,
         "created_at": datetime.utcnow()

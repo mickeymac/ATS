@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { CardSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
+import { formatLastUpdated } from '../utils/export';
 import ReviewStepper from '../components/ReviewStepper';
 import { ResumeViewer } from '../components/applications/ResumeViewer';
 import { 
@@ -23,12 +26,16 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-  Spinner,
   Textarea,
   Avatar,
   Divider,
   Progress,
-  Tooltip
+  Tooltip,
+  Spinner,
+  Tabs,
+  Tab,
+  Select,
+  SelectItem
 } from '@nextui-org/react';
 import { 
   Users,
@@ -40,12 +47,20 @@ import {
   Star,
   Clock,
   MessageSquare,
-  Eye
+  Eye,
+  RefreshCw,
+  Briefcase,
+  Filter,
+  ArrowUpDown,
+  Calendar,
+  User
 } from 'lucide-react';
 
 export default function Review() {
   const { addToast } = useToast();
+  const [activeTab, setActiveTab] = useState('pending');
   const [batches, setBatches] = useState([]);
+  const [completedBatches, setCompletedBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [batchApplications, setBatchApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +70,12 @@ export default function Review() {
   const [selectedApp, setSelectedApp] = useState(null);
   const [comment, setComment] = useState('');
   const [addingComment, setAddingComment] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [isViewMode, setIsViewMode] = useState(false);
+  
+  // Filters
+  const [senderFilter, setSenderFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState('latest');
   
   const { isOpen: isResumeOpen, onOpen: onResumeOpen, onOpenChange: onResumeOpenChange } = useDisclosure();
   const { isOpen: isCommentOpen, onOpen: onCommentOpen, onOpenChange: onCommentOpenChange } = useDisclosure();
@@ -64,9 +85,12 @@ export default function Review() {
     setLoading(true);
     try {
       const response = await api.get('/review/batches');
-      // Filter only pending batches
-      const pendingBatches = response.data.filter(b => b.status === 'pending');
-      setBatches(pendingBatches);
+      // Separate pending and completed batches
+      const pending = response.data.filter(b => b.status === 'pending');
+      const completed = response.data.filter(b => b.status === 'completed');
+      setBatches(pending);
+      setCompletedBatches(completed);
+      setLastUpdated(new Date());
     } catch {
       addToast('Failed to fetch review batches.', 'error');
     } finally {
@@ -78,8 +102,9 @@ export default function Review() {
     fetchBatches();
   }, [fetchBatches]);
 
-  const handleSelectBatch = async (batch) => {
+  const handleSelectBatch = async (batch, viewOnly = false) => {
     setSelectedBatch(batch);
+    setIsViewMode(viewOnly);
     setLoadingApplications(true);
     setSelectedIds(new Set());
     try {
@@ -99,7 +124,33 @@ export default function Review() {
     setSelectedBatch(null);
     setBatchApplications([]);
     setSelectedIds(new Set());
+    setIsViewMode(false);
   };
+  
+  // Get unique senders for filter dropdown
+  const currentBatches = activeTab === 'pending' ? batches : completedBatches;
+  const uniqueSenders = [...new Set(currentBatches.map(b => b.recruiter_name))];
+  
+  // Apply filters and sorting
+  const getFilteredBatches = () => {
+    let filtered = activeTab === 'pending' ? [...batches] : [...completedBatches];
+    
+    // Filter by sender
+    if (senderFilter !== 'all') {
+      filtered = filtered.filter(b => b.recruiter_name === senderFilter);
+    }
+    
+    // Sort
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.created_at);
+      const dateB = new Date(b.created_at);
+      return sortOrder === 'latest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    return filtered;
+  };
+  
+  const filteredBatches = getFilteredBatches();
 
   const handleSelectAll = (isSelected) => {
     if (isSelected) {
@@ -190,8 +241,15 @@ export default function Review() {
   if (loading) {
     return (
       <AppShell>
-        <div className="flex h-96 items-center justify-center">
-          <Spinner size="lg" label="Loading review batches..." />
+        <Breadcrumbs />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">Review Queue</h1>
+            <p className="text-default-600">Loading review batches...</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3].map(i => <CardSkeleton key={i} />)}
+          </div>
         </div>
       </AppShell>
     );
@@ -201,66 +259,191 @@ export default function Review() {
   if (!selectedBatch) {
     return (
       <AppShell>
+        <Breadcrumbs />
         <div className="flex flex-col gap-6">
           {/* Page Header */}
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-default-900">Review Candidates</h1>
-            <p className="text-default-600">Review candidate profiles submitted by recruiters</p>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-bold tracking-tight text-default-900">Review Candidates</h1>
+              <p className="text-default-600">Review candidate profiles submitted by recruiters</p>
+              {lastUpdated && (
+                <p className="text-xs text-default-400">Last updated: {formatLastUpdated(lastUpdated)}</p>
+              )}
+            </div>
+            <Tooltip content="Refresh">
+              <Button isIconOnly variant="flat" onPress={fetchBatches}>
+                <RefreshCw size={18} />
+              </Button>
+            </Tooltip>
+          </div>
+
+          {/* Tabs */}
+          <Tabs 
+            selectedKey={activeTab} 
+            onSelectionChange={setActiveTab}
+            color="primary"
+            variant="solid"
+          >
+            <Tab 
+              key="pending" 
+              title={
+                <div className="flex items-center gap-2">
+                  <Clock size={16} />
+                  <span>Pending Reviews</span>
+                  {batches.length > 0 && (
+                    <Chip size="sm" color="warning" variant="flat">{batches.length}</Chip>
+                  )}
+                </div>
+              }
+            />
+            <Tab 
+              key="completed" 
+              title={
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  <span>Completed Reviews</span>
+                  {completedBatches.length > 0 && (
+                    <Chip size="sm" color="success" variant="flat">{completedBatches.length}</Chip>
+                  )}
+                </div>
+              }
+            />
+          </Tabs>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-default-500" />
+              <span className="text-sm text-default-600">Filters:</span>
+            </div>
+            <Select
+              label="Sender"
+              placeholder="All Senders"
+              selectedKeys={[senderFilter]}
+              onSelectionChange={(keys) => setSenderFilter(Array.from(keys)[0] || 'all')}
+              className="w-48"
+              size="sm"
+              startContent={<User size={14} className="text-default-400" />}
+            >
+              <SelectItem key="all">All Senders</SelectItem>
+              {uniqueSenders.map((sender) => (
+                <SelectItem key={sender}>{sender}</SelectItem>
+              ))}
+            </Select>
+            <Select
+              label="Sort By"
+              placeholder="Sort"
+              selectedKeys={[sortOrder]}
+              onSelectionChange={(keys) => setSortOrder(Array.from(keys)[0] || 'latest')}
+              className="w-40"
+              size="sm"
+              startContent={<ArrowUpDown size={14} className="text-default-400" />}
+            >
+              <SelectItem key="latest">Latest First</SelectItem>
+              <SelectItem key="oldest">Oldest First</SelectItem>
+            </Select>
           </div>
 
           {/* Batches Grid */}
-          {batches.length === 0 ? (
+          {filteredBatches.length === 0 ? (
             <Card className="p-12 border border-divider">
               <CardBody className="flex flex-col items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-default-100">
                   <Users className="h-8 w-8 text-default-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-default-900">No pending reviews</h3>
+                <h3 className="text-lg font-semibold text-default-900">
+                  {activeTab === 'pending' ? 'No pending reviews' : 'No completed reviews'}
+                </h3>
                 <p className="text-sm text-default-500 text-center">
-                  When recruiters send candidates for review, they will appear here.
+                  {activeTab === 'pending' 
+                    ? 'When recruiters send candidates for review, they will appear here.'
+                    : 'Completed review batches will appear here.'}
                 </p>
               </CardBody>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {batches.map((batch) => (
+              {filteredBatches.map((batch) => (
                 <Card 
                   key={batch._id} 
                   className="border border-divider cursor-pointer hover:border-primary transition-colors"
                   isPressable
-                  onPress={() => handleSelectBatch(batch)}
+                  onPress={() => handleSelectBatch(batch, activeTab === 'completed')}
                 >
                   <CardHeader className="flex gap-3">
                     <Avatar 
                       name={batch.recruiter_name?.charAt(0).toUpperCase() || 'R'}
-                      color="primary"
+                      color={activeTab === 'pending' ? 'primary' : 'success'}
                       size="md"
                     />
-                    <div className="flex flex-col">
-                      <p className="text-md font-semibold">{batch.recruiter_name}</p>
-                      <p className="text-small text-default-500">
-                        {new Date(batch.created_at).toLocaleDateString()} at {new Date(batch.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                    <div className="flex flex-col flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-md font-semibold">{batch.recruiter_name}</p>
+                        <Chip 
+                          size="sm" 
+                          color={batch.is_resubmission ? 'warning' : activeTab === 'completed' ? 'success' : 'primary'} 
+                          variant="flat"
+                        >
+                          {batch.is_resubmission ? 'Resubmission' : activeTab === 'completed' ? 'Completed' : 'New'}
+                        </Chip>
+                      </div>
+                      <div className="flex items-center gap-1 text-small text-default-500">
+                        <Calendar size={12} />
+                        <span>
+                          {new Date(batch.created_at).toLocaleDateString()} at {new Date(batch.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   </CardHeader>
                   <Divider />
                   <CardBody className="gap-3">
+                    {/* Job Roles */}
+                    {batch.job_titles && batch.job_titles.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Briefcase size={14} className="text-default-500" />
+                        {batch.job_titles.slice(0, 2).map((title, idx) => (
+                          <Chip key={idx} size="sm" variant="flat" color="secondary" className="text-xs">
+                            {title}
+                          </Chip>
+                        ))}
+                        {batch.job_titles.length > 2 && (
+                          <Chip size="sm" variant="flat" color="default" className="text-xs">
+                            +{batch.job_titles.length - 2} more
+                          </Chip>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Candidate Count */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Users size={16} className="text-default-500" />
                         <span className="text-default-700">{batch.candidate_count} Candidate(s)</span>
                       </div>
-                      <Chip 
-                        size="sm" 
-                        color={batch.is_resubmission ? 'warning' : 'primary'} 
-                        variant="flat"
-                      >
-                        {batch.is_resubmission ? 'Resubmission' : 'New'}
-                      </Chip>
                     </div>
-                    <Button color="primary" variant="flat" className="w-full">
-                      Review Candidates
-                    </Button>
+                    
+                    {/* Completed batch stats */}
+                    {activeTab === 'completed' && (
+                      <div className="flex items-center gap-3">
+                        <Chip size="sm" color="success" variant="flat" startContent={<CheckCircle size={12} />}>
+                          {batch.approved_count || 0} Approved
+                        </Chip>
+                        <Chip size="sm" color="danger" variant="flat" startContent={<XCircle size={12} />}>
+                          {batch.not_selected_count || 0} Rejected
+                        </Chip>
+                      </div>
+                    )}
+                    
+                    {/* Completed by info */}
+                    {activeTab === 'completed' && batch.completed_by_name && (
+                      <div className="text-xs text-default-500">
+                        Reviewed by: <span className="font-medium">{batch.completed_by_name}</span>
+                      </div>
+                    )}
+                    
+                    <div className="text-center text-sm text-primary font-medium mt-2">
+                      {activeTab === 'pending' ? 'Click to Review Candidates' : 'Click to View Details'}
+                    </div>
                   </CardBody>
                 </Card>
               ))}
@@ -284,39 +467,68 @@ export default function Review() {
           >
             <ArrowLeft size={20} />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-default-900">
-              Review from {selectedBatch.recruiter_name}
-            </h1>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-default-900">
+                {isViewMode ? 'Completed Review' : 'Review'} from {selectedBatch.recruiter_name}
+              </h1>
+              {isViewMode && (
+                <Chip color="success" variant="flat" startContent={<CheckCircle size={14} />}>
+                  Completed
+                </Chip>
+              )}
+            </div>
             <p className="text-default-600">
               {selectedBatch.candidate_count} candidates • Submitted {new Date(selectedBatch.created_at).toLocaleDateString()}
+              {isViewMode && selectedBatch.completed_at && (
+                <span> • Reviewed {new Date(selectedBatch.completed_at).toLocaleDateString()}</span>
+              )}
             </p>
+            {isViewMode && selectedBatch.completed_by_name && (
+              <p className="text-sm text-default-500">
+                Reviewed by: <span className="font-medium">{selectedBatch.completed_by_name}</span>
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Actions Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {selectedIds.size > 0 && (
-              <Chip color="success" variant="flat">
-                {selectedIds.size} selected for approval
-              </Chip>
-            )}
-            {batchApplications.length - selectedIds.size > 0 && selectedIds.size > 0 && (
-              <Chip color="danger" variant="flat">
-                {batchApplications.length - selectedIds.size} will not be selected
-              </Chip>
-            )}
+        {/* View Mode Summary */}
+        {isViewMode && (
+          <div className="flex items-center gap-4">
+            <Chip size="lg" color="success" variant="flat" startContent={<CheckCircle size={16} />}>
+              {selectedBatch.approved_count || 0} Approved
+            </Chip>
+            <Chip size="lg" color="danger" variant="flat" startContent={<XCircle size={16} />}>
+              {selectedBatch.not_selected_count || 0} Not Selected
+            </Chip>
           </div>
-          <Button
-            color="primary"
-            startContent={<CheckCircle size={16} />}
-            isLoading={submitting}
-            onPress={handleCompleteReviewClick}
-          >
-            Complete Review
-          </Button>
-        </div>
+        )}
+
+        {/* Actions Bar - Only show in edit mode */}
+        {!isViewMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Chip color="success" variant="flat">
+                  {selectedIds.size} selected for approval
+                </Chip>
+              )}
+              {batchApplications.length - selectedIds.size > 0 && selectedIds.size > 0 && (
+                <Chip color="danger" variant="flat">
+                  {batchApplications.length - selectedIds.size} will not be selected
+                </Chip>
+              )}
+            </div>
+            <Button
+              color="primary"
+              startContent={<CheckCircle size={16} />}
+              isLoading={submitting}
+              onPress={handleCompleteReviewClick}
+            >
+              Complete Review
+            </Button>
+          </div>
+        )}
 
         {/* Applications Table */}
         {loadingApplications ? (
@@ -327,13 +539,15 @@ export default function Review() {
           <Card className="border border-divider">
             <Table aria-label="Review candidates table" removeWrapper>
               <TableHeader>
-                <TableColumn width={50}>
-                  <Checkbox
-                    isSelected={isAllSelected}
-                    onValueChange={handleSelectAll}
-                    aria-label="Select all"
-                    color="success"
-                  />
+                <TableColumn width={80}>
+                  {isViewMode ? 'STATUS' : (
+                    <Checkbox
+                      isSelected={isAllSelected}
+                      onValueChange={handleSelectAll}
+                      aria-label="Select all"
+                      color="success"
+                    />
+                  )}
                 </TableColumn>
                 <TableColumn>CANDIDATE</TableColumn>
                 <TableColumn>JOB</TableColumn>
@@ -352,15 +566,30 @@ export default function Review() {
                   </div>
                 }
               >
-                {batchApplications.map((app) => (
-                  <TableRow key={app._id} className={selectedIds.has(app._id) ? 'bg-success-50' : ''}>
+                {batchApplications.map((app) => {
+                  const isApproved = isViewMode && (selectedBatch.approved_application_ids || []).includes(app._id);
+                  const isRejected = isViewMode && (selectedBatch.not_selected_application_ids || []).includes(app._id);
+                  return (
+                  <TableRow key={app._id} className={!isViewMode && selectedIds.has(app._id) ? 'bg-success-50' : isApproved ? 'bg-success-50' : isRejected ? 'bg-danger-50' : ''}>
                     <TableCell>
-                      <Checkbox
-                        isSelected={selectedIds.has(app._id)}
-                        onValueChange={(isSelected) => handleSelectOne(app._id, isSelected)}
-                        aria-label={`Select ${app.candidate_name_extracted}`}
-                        color="success"
-                      />
+                      {isViewMode ? (
+                        isApproved ? (
+                          <Chip size="sm" color="success" variant="flat" startContent={<CheckCircle size={12} />}>
+                            Approved
+                          </Chip>
+                        ) : (
+                          <Chip size="sm" color="danger" variant="flat" startContent={<XCircle size={12} />}>
+                            Rejected
+                          </Chip>
+                        )
+                      ) : (
+                        <Checkbox
+                          isSelected={selectedIds.has(app._id)}
+                          onValueChange={(isSelected) => handleSelectOne(app._id, isSelected)}
+                          aria-label={`Select ${app.candidate_name_extracted}`}
+                          color="success"
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <div>
@@ -423,19 +652,35 @@ export default function Review() {
                         >
                           Resume
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="flat" 
-                          color="secondary"
-                          startContent={<MessageSquare size={14} />}
-                          onPress={() => handleOpenComment(app)}
-                        >
-                          Comment
-                        </Button>
+                        {!isViewMode && (
+                          <Button 
+                            size="sm" 
+                            variant="flat" 
+                            color="secondary"
+                            startContent={<MessageSquare size={14} />}
+                            onPress={() => handleOpenComment(app)}
+                          >
+                            Comment
+                          </Button>
+                        )}
+                        {isViewMode && (app.comments || []).length > 0 && (
+                          <Tooltip content="View comments">
+                            <Button 
+                              size="sm" 
+                              variant="flat" 
+                              color="secondary"
+                              startContent={<MessageSquare size={14} />}
+                              onPress={() => handleOpenComment(app)}
+                            >
+                              {(app.comments || []).length}
+                            </Button>
+                          </Tooltip>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </Card>
@@ -469,14 +714,14 @@ export default function Review() {
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                <h2 className="text-lg font-bold">Add Comment</h2>
-                <p className="text-sm text-default-500">Comment on {selectedApp?.candidate_name_extracted || 'candidate'}</p>
+                <h2 className="text-lg font-bold">{isViewMode ? 'View Comments' : 'Add Comment'}</h2>
+                <p className="text-sm text-default-500">{isViewMode ? 'Comments for' : 'Comment on'} {selectedApp?.candidate_name_extracted || 'candidate'}</p>
               </ModalHeader>
               <ModalBody>
                 {/* Existing Comments */}
-                {selectedApp?.comments && selectedApp.comments.length > 0 && (
+                {selectedApp?.comments && selectedApp.comments.length > 0 ? (
                   <div className="space-y-3 mb-4">
-                    <p className="text-sm font-medium text-default-700">Previous Comments:</p>
+                    {!isViewMode && <p className="text-sm font-medium text-default-700">Previous Comments:</p>}
                     {selectedApp.comments.map((c, idx) => (
                       <Card key={idx} className="p-3 border border-divider">
                         <div className="flex items-start gap-3">
@@ -501,25 +746,35 @@ export default function Review() {
                       </Card>
                     ))}
                   </div>
+                ) : (
+                  isViewMode && (
+                    <div className="text-center py-8 text-default-500">
+                      No comments for this candidate.
+                    </div>
+                  )
                 )}
                 
-                <Textarea
-                  label="Your Comment"
-                  placeholder="Add your feedback or notes about this candidate..."
-                  value={comment}
-                  onValueChange={setComment}
-                  minRows={3}
-                />
+                {!isViewMode && (
+                  <Textarea
+                    label="Your Comment"
+                    placeholder="Add your feedback or notes about this candidate..."
+                    value={comment}
+                    onValueChange={setComment}
+                    minRows={3}
+                  />
+                )}
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" onPress={onClose}>Cancel</Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleAddComment}
-                  isLoading={addingComment}
-                >
-                  Add Comment
-                </Button>
+                <Button variant="light" onPress={onClose}>{isViewMode ? 'Close' : 'Cancel'}</Button>
+                {!isViewMode && (
+                  <Button 
+                    color="primary" 
+                    onPress={handleAddComment}
+                    isLoading={addingComment}
+                  >
+                    Add Comment
+                  </Button>
+                )}
               </ModalFooter>
             </>
           )}

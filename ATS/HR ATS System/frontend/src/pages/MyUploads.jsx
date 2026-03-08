@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { TableSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
+import { exportToCSV, formatLastUpdated } from '../utils/export';
 import ReviewStepper from '../components/ReviewStepper';
 import { ResumeViewer } from '../components/applications/ResumeViewer';
 import { 
@@ -10,7 +13,6 @@ import {
   Chip, 
   Input, 
   Progress,
-  Spinner,
   Select,
   SelectItem,
   Button,
@@ -24,7 +26,8 @@ import {
   ModalHeader,
   ModalBody,
   useDisclosure,
-  Avatar
+  Avatar,
+  Tooltip
 } from '@nextui-org/react';
 import { 
   FileText, 
@@ -50,7 +53,8 @@ import {
   GraduationCap,
   MessageSquare,
   Eye,
-  Briefcase
+  Briefcase,
+  Download
 } from 'lucide-react';
 
 const statusColorMap = {
@@ -94,6 +98,7 @@ export default function MyUploads() {
   const [rejectingDirectly, setRejectingDirectly] = useState(false);
   const [expandedIds, setExpandedIds] = useState(new Set());
   const [selectedApp, setSelectedApp] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
   
   const { isOpen: isResumeOpen, onOpen: onResumeOpen, onOpenChange: onResumeOpenChange } = useDisclosure();
 
@@ -107,7 +112,10 @@ export default function MyUploads() {
       ]);
       setUploads(uploadsRes.data);
       setStats(statsRes.data);
-      setJobs(jobsRes.data);
+      // Handle paginated response format
+      const jobsData = jobsRes.data;
+      setJobs(jobsData.items || jobsData);
+      setLastUpdated(new Date());
     } catch {
       addToast('Failed to fetch your uploads.', 'error');
     } finally {
@@ -337,11 +345,34 @@ export default function MyUploads() {
     onResumeOpen();
   };
 
+  // Export uploads to CSV
+  const handleExportUploads = () => {
+    const columns = [
+      { key: 'candidate_name_extracted', label: 'Candidate Name' },
+      { key: 'candidate_email_extracted', label: 'Email' },
+      { key: 'job_title', label: 'Job Title' },
+      { key: 'status', label: 'Status' },
+      { key: 'review_status', label: 'Review Status' },
+      { key: 'fit_score', label: 'Fit Score' },
+      { key: 'created_at', label: 'Uploaded At' }
+    ];
+    exportToCSV(filteredUploads, 'my-uploads', columns);
+    addToast('Uploads exported successfully.', 'success');
+  };
+
   if (loading) {
     return (
       <AppShell>
-        <div className="flex h-96 items-center justify-center">
-          <Spinner size="lg" label="Loading your uploads..." />
+        <Breadcrumbs />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">My Uploads</h1>
+            <p className="text-default-600">Loading your uploads...</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[1,2,3,4,5].map(i => <StatCardSkeleton key={i} />)}
+          </div>
+          <TableSkeleton rows={6} columns={4} />
         </div>
       </AppShell>
     );
@@ -349,11 +380,31 @@ export default function MyUploads() {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-default-900">My Uploads</h1>
-          <p className="text-default-600">Track resumes you have uploaded and manage review workflow</p>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">My Uploads</h1>
+            <p className="text-default-600">Track resumes you have uploaded and manage review workflow</p>
+            {lastUpdated && (
+              <p className="text-xs text-default-400">Last updated: {formatLastUpdated(lastUpdated)}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Tooltip content="Refresh">
+              <Button isIconOnly variant="flat" onPress={fetchMyUploads}>
+                <RefreshCw size={18} />
+              </Button>
+            </Tooltip>
+            {filteredUploads.length > 0 && (
+              <Tooltip content="Export to CSV">
+                <Button isIconOnly variant="flat" onPress={handleExportUploads}>
+                  <Download size={18} />
+                </Button>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards */}

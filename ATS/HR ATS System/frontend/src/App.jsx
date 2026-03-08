@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import Analytics from './pages/Analytics';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import Permissions from './pages/Permissions';
 import Unauthorized from './pages/Unauthorized';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -40,6 +41,7 @@ function App() {
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/permissions" element={<Permissions />} />
                 </Route>
 
                 <Route path="/unauthorized" element={<Unauthorized />} />

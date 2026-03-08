@@ -54,7 +54,12 @@ const Analytics = () => {
     setLoading(true);
     try {
       const [usersRes, jobsRes] = await Promise.all([api.get('/users/'), api.get('/jobs/')]);
-      setStats({ users: usersRes.data.length, jobs: jobsRes.data.length });
+      // Handle paginated response format
+      const usersData = usersRes.data;
+      const jobsData = jobsRes.data;
+      const users = usersData.items || usersData;
+      const jobs = jobsData.items || jobsData;
+      setStats({ users: users.length, jobs: jobs.length });
     } catch {
       addToast('Failed to load analytics.', 'error');
     } finally {

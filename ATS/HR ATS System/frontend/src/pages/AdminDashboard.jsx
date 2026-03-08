@@ -21,11 +21,14 @@ import {
   useDisclosure,
   Select,
   SelectItem,
-  Spinner
+  Tooltip
 } from '@nextui-org/react';
 import { AppShell } from '../components/AppShell';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { StatCardSkeleton, TableSkeleton } from '../components/SkeletonLoaders';
+import { formatLastUpdated } from '../utils/export';
 import { useToast } from '../context/ToastContext';
-import { Users, UserCheck, UserX, CalendarCheck, Upload, Plus, MoreVertical } from 'lucide-react';
+import { Users, UserCheck, UserX, CalendarCheck, Upload, Plus, MoreVertical, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { StatsCard } from '../components/dashboard/StatsCard';
 import { ApplicationTrendsChart } from '../components/dashboard/Charts';
@@ -45,6 +48,7 @@ const AdminDashboard = () => {
   const [chartData, setChartData] = useState([]);
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
   
   // Upload resume state
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
@@ -61,8 +65,11 @@ const AdminDashboard = () => {
         api.get('/applications/')
       ]);
 
-      const jobsList = jobsRes.data;
-      const apps = appsRes.data;
+      // Handle paginated response format
+      const jobsData = jobsRes.data;
+      const jobsList = jobsData.items || jobsData;
+      const appsData = appsRes.data;
+      const apps = appsData.items || appsData;
       
       setJobs(jobsList);
 
@@ -88,6 +95,7 @@ const AdminDashboard = () => {
         { name: 'Jun', applicants: apps.length, shortlisted: statsCalc.shortlisted },
       ];
       setChartData(monthlyData);
+      setLastUpdated(new Date());
 
     } catch {
       addToast("Failed to load dashboard data.", "error");
@@ -148,8 +156,16 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <AppShell>
-        <div className="flex h-96 items-center justify-center">
-          <Spinner size="lg" label="Loading dashboard..." />
+        <Breadcrumbs />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">Dashboard Overview</h1>
+            <p className="text-default-600">Loading dashboard...</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[1,2,3,4].map(i => <StatCardSkeleton key={i} />)}
+          </div>
+          <TableSkeleton rows={5} columns={4} />
         </div>
       </AppShell>
     );
@@ -157,11 +173,22 @@ const AdminDashboard = () => {
 
   return (
     <AppShell>
+      <Breadcrumbs />
       <div className="flex flex-col gap-6">
         {/* Page Header */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-default-900">Dashboard Overview</h1>
-          <p className="text-default-600">Welcome back, here&apos;s what&apos;s happening today.</p>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold tracking-tight text-default-900">Dashboard Overview</h1>
+            <p className="text-default-600">Welcome back, here&apos;s what&apos;s happening today.</p>
+            {lastUpdated && (
+              <p className="text-xs text-default-400">Last updated: {formatLastUpdated(lastUpdated)}</p>
+            )}
+          </div>
+          <Tooltip content="Refresh">
+            <Button isIconOnly variant="flat" onPress={fetchDashboardData}>
+              <RefreshCw size={18} />
+            </Button>
+          </Tooltip>
         </div>
 
         {/* Action Buttons */}
