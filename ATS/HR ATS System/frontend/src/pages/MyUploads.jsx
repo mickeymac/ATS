@@ -894,10 +894,6 @@ export default function MyUploads() {
                             <span className="text-default-500">Education:</span>
                             <span className="font-medium">{app.score_display?.education || `${app.education_score?.toFixed(0) || 0}%`}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-default-500">Semantic:</span>
-                            <span className="font-medium">{app.score_display?.semantic || `${app.semantic_score?.toFixed(0) || 0}%`}</span>
-                          </div>
                           <Divider className="my-2" />
                           <div className="flex justify-between font-semibold">
                             <span className="text-default-700">Total:</span>

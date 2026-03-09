@@ -127,7 +127,6 @@ async def upload_resume(
             "skill_score": 0.0,
             "experience_score": 0.0,
             "education_score": 0.0,
-            "semantic_score": 0.0,
             "final_score": 0.0,
             "matched_skills": [],
             "missing_skills": [],
@@ -146,16 +145,14 @@ async def upload_resume(
         "skill_score": scoring_result.get("skill_score", 0.0),
         "experience_score": scoring_result.get("experience_score", 0.0),
         "education_score": scoring_result.get("education_score", 0.0),
-        "semantic_score": scoring_result.get("semantic_score", 0.0),
         "final_score": scoring_result.get("final_score", 0.0),
         
         # Score display format (showing contribution out of max weight)
-        # Weights: skill=35%, experience=25%, education=10%, semantic=30%
+        # Weights: skill=50%, experience=35%, education=15%
         "score_display": {
-            "skill": f"{round(scoring_result.get('skill_score', 0.0) * 0.35, 1)}/35",
-            "experience": f"{round(scoring_result.get('experience_score', 0.0) * 0.25, 1)}/25",
-            "education": f"{round(scoring_result.get('education_score', 0.0) * 0.10, 1)}/10",
-            "semantic": f"{round(scoring_result.get('semantic_score', 0.0) * 0.30, 1)}/30",
+            "skill": f"{round(scoring_result.get('skill_score', 0.0) * 0.50, 1)}/50",
+            "experience": f"{round(scoring_result.get('experience_score', 0.0) * 0.35, 1)}/35",
+            "education": f"{round(scoring_result.get('education_score', 0.0) * 0.15, 1)}/15",
             "total": f"{round(scoring_result.get('final_score', 0.0), 1)}/100"
         },
         

@@ -95,12 +95,6 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
                {application.education_score?.toFixed(0) || 0}%
              </span>
            </div>
-           <div className="flex items-center justify-between text-sm">
-             <span className="text-default-900">Semantic Match</span>
-             <span className={`font-medium ${application.semantic_score >= 80 ? 'text-success' : application.semantic_score >= 60 ? 'text-warning' : 'text-danger'}`}>
-               {application.semantic_score?.toFixed(0) || 0}%
-             </span>
-           </div>
         </div>
       </div>
 

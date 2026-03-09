@@ -130,7 +130,6 @@ def test_scoring_system():
     print(f"  Skill Score: {score1['skill_score']:.1f}/100")
     print(f"  Experience Score: {score1['experience_score']:.1f}/100")
     print(f"  Education Score: {score1['education_score']:.1f}/100")
-    print(f"  Semantic Score: {score1['semantic_score']:.1f}/100")
     print(f"  " + "─"*35)
     print(f"  FINAL SCORE: {score1['final_score']:.1f}/100 ⭐")
     print(f"\n  Matched Skills: {score1['matched_skills']}")
@@ -157,7 +156,6 @@ def test_scoring_system():
     print(f"  Skill Score: {score2['skill_score']:.1f}/100")
     print(f"  Experience Score: {score2['experience_score']:.1f}/100")
     print(f"  Education Score: {score2['education_score']:.1f}/100")
-    print(f"  Semantic Score: {score2['semantic_score']:.1f}/100")
     print(f"  " + "─"*35)
     print(f"  FINAL SCORE: {score2['final_score']:.1f}/100 ⭐")
     print(f"\n  Matched Skills: {score2['matched_skills']}")
@@ -199,7 +197,6 @@ John Smith (Backend Engineer) scored 88+ because he has:
    - All 3 required skills (FastAPI, MongoDB, Python)
    - 5 years experience (exceeds 3 year requirement)
    - Bachelor's degree (matches education requirement)
-   - Strong semantic match to job description
 
 Jane Doe (Frontend Developer) scored lower because she has:
    - 0 of 3 required backend skills

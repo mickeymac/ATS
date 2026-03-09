@@ -87,7 +87,6 @@ async def test_resume(file_path: str, job_data: dict):
             print(f"  Skill Score: {scoring_result['skill_score']:.1f}/100")
             print(f"  Experience Score: {scoring_result['experience_score']:.1f}/100")
             print(f"  Education Score: {scoring_result['education_score']:.1f}/100")
-            print(f"  Semantic Score: {scoring_result['semantic_score']:.1f}/100")
             print(f"  -" * 35)
             print(f"  FINAL SCORE: {scoring_result['final_score']:.1f}/100")
             print(f"  ")

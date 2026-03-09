@@ -100,7 +100,6 @@ class ScoringBreakdown(BaseModel):
     skill_score: float = 0.0
     experience_score: float = 0.0
     education_score: float = 0.0
-    semantic_score: float = 0.0
     final_score: float = 0.0
     matched_skills: List[str] = []
     missing_skills: List[str] = []
@@ -116,7 +115,6 @@ class ApplicationInDB(ApplicationCreate):
     skill_score: float = 0.0
     experience_score: float = 0.0
     education_score: float = 0.0
-    semantic_score: float = 0.0
     final_score: float = 0.0
     
     # Score display (X/Y format showing contribution out of max weight)

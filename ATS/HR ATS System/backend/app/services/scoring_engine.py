@@ -2,51 +2,22 @@
 Production-grade resume scoring engine with explainable, structured scoring.
 
 Final Score Formula:
-Final Score = (0.35 × Weighted Skill Score)
-            + (0.25 × Experience Score)
-            + (0.10 × Education Score)
-            + (0.30 × Section-Based Semantic Score)
+Final Score = (0.50 × Weighted Skill Score)
+            + (0.35 × Experience Score)
+            + (0.15 × Education Score)
 
 All scores normalized to 0-100 scale.
 """
 
 import re
-import numpy as np
 from typing import Dict, List, Tuple, Any, Optional
-from sentence_transformers import SentenceTransformer
-
-# Initialize sentence transformer once (lazy load)
-_embedding_model = None
-
-
-def get_embedding_model():
-    """Lazy-load the embedding model."""
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-    return _embedding_model
-
-
-def normalize_vector(vec: np.ndarray) -> np.ndarray:
-    """Normalize a vector to unit length."""
-    norm = np.linalg.norm(vec)
-    if norm == 0:
-        return vec
-    return vec / norm
-
-
-def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
-    """Compute cosine similarity between two normalized vectors."""
-    vec1_norm = normalize_vector(vec1)
-    vec2_norm = normalize_vector(vec2)
-    return float(np.dot(vec1_norm, vec2_norm))
 
 
 class ResumeScorer:
     """Production-grade resume scoring engine."""
     
     def __init__(self):
-        self.embedding_model = get_embedding_model()
+        pass
     
     def score_application(
         self,
@@ -62,13 +33,11 @@ class ResumeScorer:
             "skill_score": float,
             "experience_score": float,
             "education_score": float,
-            "semantic_score": float,
             "final_score": float,
             "matched_skills": List[str],
             "missing_skills": List[str],
             "skill_coverage": float,
             "experience_match": float,
-            "semantic_similarity": float,
             "breakdown": Dict explaining each component
         }
         """
@@ -102,20 +71,12 @@ class ResumeScorer:
             job_education
         )
         
-        # 4. SEMANTIC SCORING
-        semantic_score = self._score_semantic(
-            parsed_candidate_data,
-            resume_text,
-            job_data
-        )
-        
-        # 5. FINAL SCORE (weighted combination)
-        # Adjusted weights: 35% skill, 25% exp, 10% edu, 30% semantic
+        # 4. FINAL SCORE (weighted combination)
+        # Weights: 50% skill, 35% exp, 15% edu
         final_score = (
-            0.35 * skill_result['skill_score'] +
-            0.25 * experience_score +
-            0.10 * education_score +
-            0.30 * semantic_score
+            0.50 * skill_result['skill_score'] +
+            0.35 * experience_score +
+            0.15 * education_score
         )
         final_score = self._clamp_score(final_score)
         
@@ -123,7 +84,6 @@ class ResumeScorer:
             "skill_score": self._clamp_score(skill_result['skill_score']),
             "experience_score": self._clamp_score(experience_score),
             "education_score": self._clamp_score(education_score),
-            "semantic_score": self._clamp_score(semantic_score),
             "final_score": final_score,
             "matched_skills": skill_result['matched_skills'],
             "missing_skills": skill_result['missing_skills'],
@@ -133,10 +93,9 @@ class ResumeScorer:
                 else (parsed_candidate_data.get('experience_years', 0) / max(job_experience_years, 1)) * 100
             )),
             "breakdown": {
-                "skill_component": skill_result['skill_score'] * 0.35,
-                "experience_component": experience_score * 0.25,
-                "education_component": education_score * 0.10,
-                "semantic_component": semantic_score * 0.30,
+                "skill_component": skill_result['skill_score'] * 0.50,
+                "experience_component": experience_score * 0.35,
+                "education_component": education_score * 0.15,
             }
         }
     
@@ -285,88 +244,6 @@ class ResumeScorer:
         
         return max_score if max_score > 0 else 30.0  # Partial credit if has any degree
     
-    def _score_semantic(
-        self,
-        parsed_candidate_data: Dict[str, Any],
-        resume_text: str,
-        job_data: Dict[str, Any]
-    ) -> float:
-        """
-        Score semantic similarity using section-wise embeddings.
-        
-        Embeds:
-        - Skills section vs job required skills
-        - Experience section vs job description/responsibilities
-        - Projects section vs job description
-        
-        Averages the similarities.
-        """
-        try:
-            similarities = []
-            
-            # 1. Skills similarity
-            candidate_skills_text = " ".join(parsed_candidate_data.get('skills', []))
-            job_skills_text = " ".join(
-                [s.get('name', s) if isinstance(s, dict) else s
-                 for s in job_data.get('weighted_skills', []) or job_data.get('required_skills', [])]
-            )
-            
-            if candidate_skills_text and job_skills_text:
-                skill_sim = self._compute_semantic_similarity(candidate_skills_text, job_skills_text)
-                similarities.append(skill_sim)
-            
-            # 2. Experience similarity
-            candidate_experience_text = resume_text[
-                max(0, resume_text.lower().find('experience')) :
-                max(0, resume_text.lower().find('education'))
-            ] if 'experience' in resume_text.lower() else resume_text[:500]
-            
-            job_description = job_data.get('description', '')
-            if candidate_experience_text and job_description:
-                exp_sim = self._compute_semantic_similarity(candidate_experience_text, job_description)
-                similarities.append(exp_sim)
-            
-            # 3. Projects similarity (if exists)
-            if 'projects' in resume_text.lower():
-                projects_start = resume_text.lower().find('projects')
-                projects_text = resume_text[projects_start:projects_start+1000]
-                if projects_text and job_description:
-                    proj_sim = self._compute_semantic_similarity(projects_text, job_description)
-                    similarities.append(proj_sim)
-            
-            # Average similarities
-            if similarities:
-                semantic_score = (sum(similarities) / len(similarities)) * 100
-            else:
-                semantic_score = 50.0  # Default if embedding fails
-            
-            return semantic_score
-        
-        except Exception as e:
-            print(f"Semantic scoring error: {e}")
-            return 50.0  # Fallback
-    
-    def _compute_semantic_similarity(self, text1: str, text2: str) -> float:
-        """
-        Compute cosine similarity between two text segments.
-        Returns value between 0 and 1.
-        """
-        try:
-            # Truncate long texts to avoid memory issues
-            max_len = 512
-            text1 = text1[:max_len] if text1 else ""
-            text2 = text2[:max_len] if text2 else ""
-            
-            if not text1 or not text2:
-                return 0.0
-            
-            embeddings = self.embedding_model.encode([text1, text2], convert_to_numpy=True)
-            similarity = cosine_similarity(embeddings[0], embeddings[1])
-            return float(similarity)
-        except Exception as e:
-            print(f"Embedding error: {e}")
-            return 0.0
-    
     def _score_formatting(
         self,
         parsed_candidate_data: Dict[str, Any],
@@ -438,7 +315,6 @@ class ResumeScorer:
         skill_result: Dict[str, Any],
         experience_score: float,
         education_score: float,
-        semantic_score: float,
         formatting_issues: List[str],
         required_experience_years: float
     ) -> List[str]:
@@ -464,10 +340,6 @@ class ResumeScorer:
         # Education recommendations
         if education_score < 50:
             recommendations.append("Education requirements may not be fully met. Highlight relevant certifications or training.")
-        
-        # Semantic recommendations
-        if semantic_score < 50:
-            recommendations.append("Tailor your resume to better match the job description keywords and responsibilities.")
         
         # Add formatting issues as recommendations
         recommendations.extend(formatting_issues[:3])

@@ -16,15 +16,14 @@ A production-ready ATS with role-based access, resume analysis using AI (Gemini)
 - MongoDB (Motor Async Driver)
 - JWT Authentication
 - Google Gemini API (Resume Summarization)
-- Sentence Transformers (Semantic Matching)
 
 ## Features
 
 - **Role-Based Access Control (RBAC):** Admin, Team Lead, Recruiter.
 - **Resume Parsing:** PDF and DOCX text extraction.
 - **AI Scoring:** 
-    - Rule-based matching (Skills, Experience).
-    - Semantic matching (Sentence Embeddings).
+    - Skill matching with weighted scoring.
+    - Experience and education evaluation.
     - Weighted final score.
 - **Dashboards:**
     - Team Lead/Recruiter: Analytics, Job Management, Application Review.
@@ -95,9 +94,7 @@ A production-ready ATS with role-based access, resume analysis using AI (Gemini)
 
 ## AI Configuration
 To enable AI features, ensure you have a valid `GEMINI_API_KEY` in `backend/.env`.
-If not provided, the system will skip AI summarization but semantic scoring (using local Sentence Transformers) will still work if the model downloads successfully.
+If not provided, the system will skip AI summarization but scoring will still work using skill, experience, and education matching.
 
-
-LLM :- sentence-transformers/all-MiniLM-L6-v2
 
 backend cmd :- Set-Location "c:/Users/91972/Desktop/projects/HR ATS System/backend"; & "C:/Users/91972/Desktop/projects/HR ATS System/venv/Scripts/python.exe" -m uvicorn app.main:app --reload

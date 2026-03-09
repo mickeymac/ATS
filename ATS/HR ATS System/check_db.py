@@ -30,7 +30,6 @@ async def check_db():
             print(f'    Skill: {scoring.get("skill_score")}')
             print(f'    Experience: {scoring.get("experience_score")}')
             print(f'    Education: {scoring.get("education_score")}')
-            print(f'    Semantic: {scoring.get("semantic_score")}')
         
         # Check parsed data
         if 'parsed_data' in app:

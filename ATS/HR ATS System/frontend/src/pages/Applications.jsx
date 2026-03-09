@@ -502,10 +502,6 @@ export default function Applications() {
                                       <span className="text-default-600">Education</span>
                                       <span className="font-medium text-default-900">{app.score_display.education}</span>
                                     </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-default-600">Semantic Match</span>
-                                      <span className="font-medium text-default-900">{app.score_display.semantic}</span>
-                                    </div>
                                     <Divider className="my-2" />
                                     <div className="flex justify-between">
                                       <span className="font-semibold text-default-900">Total Score</span>

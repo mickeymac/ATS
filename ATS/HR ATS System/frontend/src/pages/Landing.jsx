@@ -75,7 +75,7 @@ export default function Landing() {
           {[
             {
               title: "AI Resume Analysis",
-              desc: "Automatically analyze resumes with semantic matching and skill extraction.",
+              desc: "Automatically analyze resumes with intelligent skill matching and extraction.",
               color: "primary"
             },
             {
