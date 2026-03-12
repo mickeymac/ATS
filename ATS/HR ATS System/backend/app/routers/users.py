@@ -3,6 +3,7 @@ from typing import List, Optional, Dict
 from app.core.deps import check_role, check_permission, get_db, get_current_active_user
 from app.schemas.user import UserInDB, UserCreate, UserRole, UserUpdate, DEFAULT_PERMISSIONS
 from app.core.security import get_password_hash
+from app.services.socket_manager import emit_permission_updated
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime
 from bson import ObjectId
@@ -288,6 +289,14 @@ async def update_user_permissions(
         {"_id": ObjectId(user_id)},
         {"$set": {"permissions": existing_permissions}}
     )
+    
+    # Calculate effective permissions for the user
+    role = user.get("role", "recruiter")
+    role_defaults = DEFAULT_PERMISSIONS.get(role, {})
+    effective_permissions = {**role_defaults, **existing_permissions}
+    
+    # Emit socket event for real-time permission update
+    await emit_permission_updated(user_id, effective_permissions)
     
     return {"message": "Permissions updated successfully", "permissions": existing_permissions}
 

@@ -4,6 +4,7 @@ from app.core.deps import get_current_active_user, check_role, check_permission,
 from app.schemas.job import JobCreate, JobInDB, JobBase, JobUpdate
 from app.schemas.user import UserInDB, UserRole
 from app.schemas.notification import NotificationType
+from app.services.socket_manager import emit_notification, emit_job_created, emit_job_status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
@@ -82,6 +83,24 @@ async def create_job(
                     "created_by_name": current_user.name or current_user.email
                 }
             )
+            # Emit socket notification
+            await emit_notification(admin_id, {
+                "type": NotificationType.JOB_CREATED.value,
+                "title": "New Job Created",
+                "message": f"{current_user.name or current_user.email} has created a new job: {job_in.title}",
+                "data": {
+                    "job_id": job_doc["_id"],
+                    "job_title": job_in.title
+                }
+            })
+    
+    # Emit job created event for real-time updates
+    await emit_job_created({
+        "job_id": job_doc["_id"],
+        "title": job_in.title,
+        "created_by": current_user.id,
+        "created_by_name": current_user.name or current_user.email
+    })
     
     return JobInDB(**job_doc)
 
@@ -246,6 +265,15 @@ async def toggle_job_active(
             "status_changed_at": datetime.utcnow()
         }}
     )
+    
+    # Emit job status change for real-time updates
+    await emit_job_status({
+        "job_id": job_id,
+        "title": job.get("title", ""),
+        "is_active": new_status,
+        "action": "activated" if new_status else "deactivated",
+        "changed_by": current_user.name or current_user.email
+    })
     
     return {"message": f"Job {'activated' if new_status else 'deactivated'} successfully", "is_active": new_status}
 

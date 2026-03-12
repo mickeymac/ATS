@@ -14,6 +14,7 @@ import {
 } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useSocket } from '../context/SocketContext';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -21,6 +22,7 @@ import api from '../services/api';
 export function Navbar() {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { subscribe, isConnected } = useSocket();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState([]);
@@ -52,10 +54,40 @@ export function Navbar() {
     }
   }, [user]);
 
-  // Fetch count on mount and periodically
+  // Subscribe to real-time notification events
+  useEffect(() => {
+    if (!user || !isConnected) return;
+
+    // Subscribe to new notifications
+    const unsubscribeNew = subscribe('notification:new', (data) => {
+      console.log('[Socket] New notification received:', data);
+      // Add to notifications list if popover is open
+      setNotifications(prev => [{
+        _id: Date.now().toString(), // Temporary ID until refresh
+        ...data,
+        created_at: new Date().toISOString()
+      }, ...prev]);
+      // Increment count
+      setNotificationCount(prev => prev + 1);
+    });
+
+    // Subscribe to notification count updates
+    const unsubscribeCount = subscribe('notification:count', (data) => {
+      console.log('[Socket] Notification count updated:', data.count);
+      setNotificationCount(data.count);
+    });
+
+    return () => {
+      unsubscribeNew();
+      unsubscribeCount();
+    };
+  }, [user, isConnected, subscribe]);
+
+  // Fetch count on mount and periodically (fallback for socket disconnection)
   useEffect(() => {
     fetchNotificationCount();
-    const interval = setInterval(fetchNotificationCount, 30000); // Every 30 seconds
+    // Use longer interval since we have real-time updates
+    const interval = setInterval(fetchNotificationCount, 60000); // Every 60 seconds as fallback
     return () => clearInterval(interval);
   }, [fetchNotificationCount]);
 

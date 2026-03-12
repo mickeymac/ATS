@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 
@@ -108,6 +108,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Update permissions only (used by socket events)
+  const updatePermissions = useCallback((newPermissions) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        permissions: newPermissions
+      };
+    });
+  }, []);
+
   // Helper function to check if user has a specific permission
   const hasPermission = (permission) => {
     if (!user) return false;
@@ -117,7 +128,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser, hasPermission }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, updateUser, updatePermissions, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

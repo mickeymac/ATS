@@ -25,38 +25,16 @@ async def register(user_in: UserCreate, db: AsyncIOMotorDatabase = Depends(get_d
     user_doc["created_at"] = datetime.utcnow() # Helper needed or direct usage
     
     result = await db.users.insert_one(user_doc)
+    user_id = str(result.inserted_id)
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    # Add role to token
-    to_encode = {"sub": user_in.email, "role": user_in.role}
-    # We need to modify create_access_token to accept claims or handle it differently
-    # Let's override the subject in create_access_token or just use logic here
-    # Since create_access_token in security.py takes "subject" which usually is ID or Email.
-    # We'll encode extra claims manually or modify security.py. 
-    # Actually, let's fix security.py in next step if needed, or just update logic here.
     
-    # Wait, security.py `create_access_token` takes `subject`. 
-    # Let's assume we modify `create_access_token` to accept extra data or we just modify `security.py` later.
-    # For now, let's re-implement token creation here locally or update security.py.
-    # To keep it clean, I will update security.py to support custom claims.
-    
-    # For now, I'll just use the existing function but I need to pass the role.
-    # The existing function: to_encode = {"exp": expire, "sub": str(subject)}
-    # I will modify security.py to allow extra claims.
-    
-    # But wait, I can't modify it easily in the middle of this thought process without another tool call.
-    # I will use a temporary local implementation or just proceed and fix security.py after.
-    # Let's fix security.py AFTER this tool call.
-    
+    # Include user_id in token for Socket.IO room targeting
     access_token = create_access_token(
         subject=user_in.email,
         expires_delta=access_token_expires,
-        additional_claims={"role": user_in.role.value},
+        additional_claims={"role": user_in.role.value, "user_id": user_id},
     )
-    
-    # Wait, if I don't put role in token, `get_current_user` will fail to extract it?
-    # `get_current_user` tries to get "role" from payload.
-    # So I MUST put role in token.
     
     return {"access_token": access_token, "token_type": "bearer", "role": user_in.role}
 
@@ -73,7 +51,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncIOMot
         access_token = create_access_token(
             subject=settings.ADMIN_EMAIL,
             expires_delta=access_token_expires,
-            additional_claims={"role": UserRole.ADMIN.value},
+            additional_claims={"role": UserRole.ADMIN.value, "user_id": "admin-static"},
         )
         return {"access_token": access_token, "token_type": "bearer", "role": UserRole.ADMIN.value}
 
@@ -86,11 +64,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncIOMot
         )
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    # We need to inject role into the token.
-    # I'll rely on the updated security.py which I will write immediately.
+    # Include user_id in token for Socket.IO room targeting
     
     access_token = create_access_token(
-        subject=user["email"], expires_delta=access_token_expires, additional_claims={"role": user["role"]}
+        subject=user["email"], 
+        expires_delta=access_token_expires, 
+        additional_claims={"role": user["role"], "user_id": str(user["_id"])}
     )
     
     return {"access_token": access_token, "token_type": "bearer", "role": user["role"]}

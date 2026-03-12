@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import { AppShell } from '../components/AppShell';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { CardSkeleton, StatCardSkeleton } from '../components/SkeletonLoaders';
@@ -58,6 +59,7 @@ import {
 
 export default function Review() {
   const { addToast } = useToast();
+  const { subscribe, isConnected } = useSocket();
   const [activeTab, setActiveTab] = useState('pending');
   const [batches, setBatches] = useState([]);
   const [completedBatches, setCompletedBatches] = useState([]);
@@ -101,6 +103,36 @@ export default function Review() {
   useEffect(() => {
     fetchBatches();
   }, [fetchBatches]);
+
+  // Subscribe to real-time batch events
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Subscribe to new batch created events
+    const unsubscribeBatchCreated = subscribe('batch:created', (data) => {
+      console.log('[Socket] New batch created:', data);
+      addToast('New review batch received!', 'info');
+      // Add new batch to the pending list
+      setBatches(prev => [{
+        ...data,
+        _id: Date.now().toString() // Temporary ID
+      }, ...prev]);
+      setLastUpdated(new Date());
+    });
+
+    // Subscribe to batch completed events
+    const unsubscribeBatchCompleted = subscribe('batch:completed', (data) => {
+      console.log('[Socket] Batch completed:', data);
+      addToast(`Review batch completed by ${data.completed_by_name}`, 'success');
+      // Refresh the batches to get updated list
+      fetchBatches();
+    });
+
+    return () => {
+      unsubscribeBatchCreated();
+      unsubscribeBatchCompleted();
+    };
+  }, [isConnected, subscribe, addToast, fetchBatches]);
 
   const handleSelectBatch = async (batch, viewOnly = false) => {
     setSelectedBatch(batch);

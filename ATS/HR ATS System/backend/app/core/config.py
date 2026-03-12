@@ -19,8 +19,6 @@ class Settings(BaseSettings):
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DB_NAME: str = os.getenv("DB_NAME", "hr_ats")
     
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    
     MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "")
     MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD", "")
     MAIL_FROM: str = os.getenv("MAIL_FROM", "")

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
 from app.routers import auth, users, jobs, applications, review, notifications
+from app.services.socket_manager import create_socket_app
 import os
 
 app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json")
@@ -56,3 +57,6 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 @app.get("/")
 def read_root():
     return {"message": "Welcome to AI-Powered ATS API"}
+
+# Create Socket.IO wrapped ASGI app - this is what uvicorn should run
+socket_asgi_app = create_socket_app(app)

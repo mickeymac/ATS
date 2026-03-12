@@ -1,19 +1,34 @@
+# Core Framework
 fastapi
 uvicorn
 motor
 pydantic[email]
 pydantic-settings
+
+# Authentication
 passlib[bcrypt]
 python-jose[cryptography]
+
+# File Handling
 python-multipart
 python-docx
 pdfplumber
-google-generativeai
-python-dotenv
 aiofiles
-emails
-langchain
-langchain-core
+
+# Utilities
+python-dotenv
+
+# WebSockets
+python-socketio
+
+# Tier 1: Groq LLM Extraction
+groq
+nest-asyncio
+
+# Tier 2: HuggingFace Extraction (Mistral 7B)
 langchain-huggingface
 huggingface_hub
-nltk
+
+# PDF & OCR Processing
+pymupdf
+easyocr

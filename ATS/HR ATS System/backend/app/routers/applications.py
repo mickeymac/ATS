@@ -3,7 +3,8 @@ from typing import List, Optional
 from app.core.deps import get_current_active_user, check_role, get_db
 from app.schemas.job import ApplicationCreate, ApplicationInDB, ApplicationStatus
 from app.schemas.user import UserInDB, UserRole
-from app.services.resume_extractor import extract_text_from_bytes, extract_candidate_info
+from app.services.resume_extractor import extract_text_from_bytes
+from app.services.smart_extractor import smart_extract_candidate_info
 from app.services.scoring_engine import evaluate_application_v2
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
@@ -73,8 +74,20 @@ async def upload_resume(
     try:
         # Use extract_text_from_bytes with the content we already have
         extracted_text = extract_text_from_bytes(file_content, file.filename)
-        parsed_candidate_data = extract_candidate_info(extracted_text)
+        
+        # Use Smart Extractor (3-tier: LlamaParse+Groq -> Mistral7B -> Regex)
+        parsed_candidate_data = await smart_extract_candidate_info(
+            file_content=file_content,
+            filename=file.filename,
+            resume_text=extracted_text
+        )
+        
+        extraction_tier = parsed_candidate_data.get('extraction_tier', 0)
+        extraction_method = parsed_candidate_data.get('extraction_method', 'unknown')
+        tier_names = {1: 'LlamaParse+Groq', 2: 'Mistral 7B', 3: 'Regex', 0: 'Failed'}
+        
         print(f"✓ Successfully extracted {len(extracted_text)} chars from {file.filename}")
+        print(f"✓ Extraction Tier: {extraction_tier} ({tier_names.get(extraction_tier, 'Unknown')})")
         print(f"✓ Parsed data: name={parsed_candidate_data.get('name')}, skills={len(parsed_candidate_data.get('skills', []))}")
     except Exception as e:
         import traceback
@@ -177,6 +190,13 @@ async def upload_resume(
         "candidate_certifications": parsed_candidate_data.get("certifications", []),
         "candidate_summary": parsed_candidate_data.get("summary", ""),
         "extraction_method": parsed_candidate_data.get("extraction_method", "regex"),
+        "extraction_tier": parsed_candidate_data.get("extraction_tier", 3),
+        
+        # NEW: Rich extraction data from Smart Extractor
+        "experience_details": parsed_candidate_data.get("experience_details", []),
+        "domain_experience": parsed_candidate_data.get("domain_experience", []),
+        "awards": parsed_candidate_data.get("awards", []),
+        "education_details": parsed_candidate_data.get("education_details", []),
         
         # File hash for duplicate detection
         "file_hash": file_hash,

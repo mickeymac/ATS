@@ -7,6 +7,8 @@ Uses LLM for intelligent data extraction with regex fallback.
 import io
 import re
 import logging
+import shutil
+import subprocess
 import pdfplumber
 import docx
 from fastapi import UploadFile
@@ -14,12 +16,59 @@ from typing import Tuple, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+# Check for pymupdf
+try:
+    import fitz  # pymupdf
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
+# Check for EasyOCR (pure Python, no external dependencies)
+EASYOCR_AVAILABLE = False
+_easyocr_reader = None
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+    logger.info("EasyOCR available for scanned PDF extraction")
+except ImportError:
+    logger.warning("EasyOCR not available")
+
+# Check for pytesseract OCR  
 try:
     from pdf2image import convert_from_bytes
     import pytesseract
-    OCR_AVAILABLE = True
+    # Actually check if Tesseract binary is installed
+    tesseract_path = shutil.which("tesseract")
+    if tesseract_path:
+        OCR_AVAILABLE = True
+        logger.info(f"Tesseract OCR found at: {tesseract_path}")
+    else:
+        OCR_AVAILABLE = False
+        logger.warning("pytesseract installed but Tesseract binary not found in PATH")
 except ImportError:
     OCR_AVAILABLE = False
+
+# Check for pymupdf OCR capability
+PYMUPDF_OCR_AVAILABLE = False
+if PYMUPDF_AVAILABLE:
+    try:
+        # pymupdf can do OCR if Tesseract is installed
+        result = subprocess.run(["tesseract", "--version"], capture_output=True, timeout=5)
+        if result.returncode == 0:
+            PYMUPDF_OCR_AVAILABLE = True
+            logger.info("pymupdf OCR capability available")
+    except Exception:
+        pass
+
+
+def _get_easyocr_reader():
+    """Lazy-load EasyOCR reader to avoid slow startup."""
+    global _easyocr_reader
+    if _easyocr_reader is None and EASYOCR_AVAILABLE:
+        import easyocr
+        _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use CPU for compatibility
+        logger.info("EasyOCR reader initialized")
+    return _easyocr_reader
 
 
 def extract_text_from_bytes(content: bytes, filename: str) -> str:
@@ -34,15 +83,38 @@ def extract_text_from_bytes(content: bytes, filename: str) -> str:
 
     # PDF handling
     if file_ext == "pdf":
-        extracted_text = _extract_from_pdf(content)
+        # Try pymupdf first (faster and more reliable)
+        if PYMUPDF_AVAILABLE:
+            extracted_text = _extract_from_pdf_pymupdf(content)
         
-        # OCR fallback if text is too short
-        if OCR_AVAILABLE and (not extracted_text or len(extracted_text.strip()) < 100):
-            extracted_text = _extract_from_pdf_ocr(content)
-            if not extracted_text:
-                raise ValueError("Failed to extract text from PDF (even with OCR)")
-        elif not extracted_text:
-            raise ValueError("Failed to extract text from PDF")
+        # Fallback to pdfplumber if pymupdf failed
+        if not extracted_text or len(extracted_text.strip()) < 50:
+            extracted_text = _extract_from_pdf(content)
+        
+        # OCR fallback if text is too short (likely scanned PDF)
+        if not extracted_text or len(extracted_text.strip()) < 100:
+            logger.info("PDF appears to be scanned, attempting OCR extraction...")
+            
+            # Try EasyOCR first (no external dependencies)
+            if EASYOCR_AVAILABLE:
+                logger.info("Using EasyOCR for scanned PDF...")
+                extracted_text = _extract_from_pdf_easyocr(content)
+            
+            # Try pymupdf OCR
+            if (not extracted_text or len(extracted_text.strip()) < 50) and PYMUPDF_OCR_AVAILABLE:
+                logger.info("Trying pymupdf OCR...")
+                extracted_text = _extract_from_pdf_pymupdf_ocr(content)
+            
+            # Try pytesseract OCR
+            if (not extracted_text or len(extracted_text.strip()) < 50) and OCR_AVAILABLE:
+                logger.info("Trying pytesseract OCR...")
+                extracted_text = _extract_from_pdf_ocr(content)
+            
+            if not extracted_text or len(extracted_text.strip()) < 50:
+                raise ValueError(
+                    "This PDF appears to be a scanned image and OCR extraction failed. "
+                    "Please upload a text-based PDF or DOCX file instead."
+                )
 
     # DOCX handling
     elif file_ext == "docx":
@@ -79,15 +151,38 @@ async def extract_text_from_file(file: UploadFile) -> str:
 
     # PDF handling
     if file_ext == "pdf" or "pdf" in content_type:
-        extracted_text = _extract_from_pdf(content)
+        # Try pymupdf first (faster and more reliable)
+        if PYMUPDF_AVAILABLE:
+            extracted_text = _extract_from_pdf_pymupdf(content)
         
-        # OCR fallback if text is too short
-        if OCR_AVAILABLE and (not extracted_text or len(extracted_text.strip()) < 100):
-            extracted_text = _extract_from_pdf_ocr(content)
-            if not extracted_text:
-                raise ValueError("Failed to extract text from PDF (even with OCR)")
-        elif not extracted_text:
-            raise ValueError("Failed to extract text from PDF")
+        # Fallback to pdfplumber if pymupdf failed
+        if not extracted_text or len(extracted_text.strip()) < 50:
+            extracted_text = _extract_from_pdf(content)
+        
+        # OCR fallback if text is too short (likely scanned PDF)
+        if not extracted_text or len(extracted_text.strip()) < 100:
+            logger.info("PDF appears to be scanned, attempting OCR extraction...")
+            
+            # Try EasyOCR first (no external dependencies)
+            if EASYOCR_AVAILABLE:
+                logger.info("Using EasyOCR for scanned PDF...")
+                extracted_text = _extract_from_pdf_easyocr(content)
+            
+            # Try pymupdf OCR
+            if (not extracted_text or len(extracted_text.strip()) < 50) and PYMUPDF_OCR_AVAILABLE:
+                logger.info("Trying pymupdf OCR...")
+                extracted_text = _extract_from_pdf_pymupdf_ocr(content)
+            
+            # Try pytesseract OCR
+            if (not extracted_text or len(extracted_text.strip()) < 50) and OCR_AVAILABLE:
+                logger.info("Trying pytesseract OCR...")
+                extracted_text = _extract_from_pdf_ocr(content)
+            
+            if not extracted_text or len(extracted_text.strip()) < 50:
+                raise ValueError(
+                    "This PDF appears to be a scanned image and OCR extraction failed. "
+                    "Please upload a text-based PDF or DOCX file instead."
+                )
 
     # DOCX handling
     elif file_ext == "docx" or "wordprocessingml" in content_type or "docx" in content_type:
@@ -107,6 +202,89 @@ async def extract_text_from_file(file: UploadFile) -> str:
         raise ValueError("Resume text is too short or empty after extraction.")
     
     return normalized_text
+
+
+def _extract_from_pdf_pymupdf(content: bytes) -> str:
+    """Extract text from PDF using pymupdf (fitz) - faster than pdfplumber."""
+    if not PYMUPDF_AVAILABLE:
+        return ""
+    try:
+        text = ""
+        doc = fitz.open(stream=content, filetype="pdf")
+        for page in doc:
+            page_text = page.get_text()
+            text += page_text + "\n"
+        doc.close()
+        return text
+    except Exception as e:
+        logger.warning(f"pymupdf extraction failed: {e}")
+        return ""
+
+
+def _extract_from_pdf_pymupdf_ocr(content: bytes) -> str:
+    """Extract text from scanned PDF using pymupdf OCR."""
+    if not PYMUPDF_AVAILABLE:
+        return ""
+    try:
+        text = ""
+        doc = fitz.open(stream=content, filetype="pdf")
+        for page in doc:
+            # Use pymupdf's OCR capability
+            page_text = page.get_text("text", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+            if not page_text or len(page_text.strip()) < 20:
+                # Try OCR if direct text extraction failed
+                try:
+                    page_text = page.get_text(textpage=None, option=fitz.TEXT_OUTPUT_TEXT)
+                except Exception:
+                    pass
+            text += page_text + "\n"
+        doc.close()
+        return text
+    except Exception as e:
+        logger.warning(f"pymupdf OCR extraction failed: {e}")
+        return ""
+
+
+def _extract_from_pdf_easyocr(content: bytes) -> str:
+    """Extract text from scanned PDF using EasyOCR (pure Python, no external binaries)."""
+    if not EASYOCR_AVAILABLE or not PYMUPDF_AVAILABLE:
+        return ""
+    
+    try:
+        import numpy as np
+        from PIL import Image
+        
+        reader = _get_easyocr_reader()
+        if reader is None:
+            return ""
+        
+        text = ""
+        doc = fitz.open(stream=content, filetype="pdf")
+        
+        for page_num, page in enumerate(doc):
+            logger.info(f"Processing page {page_num + 1}/{len(doc)} with EasyOCR...")
+            
+            # Convert page to image (high DPI for better OCR)
+            mat = fitz.Matrix(2, 2)  # 2x zoom for better resolution
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to numpy array for EasyOCR
+            img_data = pix.tobytes("ppm")
+            img = Image.open(io.BytesIO(img_data))
+            img_array = np.array(img)
+            
+            # Run OCR
+            results = reader.readtext(img_array, detail=0, paragraph=True)
+            page_text = "\n".join(results)
+            text += page_text + "\n\n"
+        
+        doc.close()
+        logger.info(f"EasyOCR extracted {len(text)} characters")
+        return text
+        
+    except Exception as e:
+        logger.warning(f"EasyOCR extraction failed: {e}")
+        return ""
 
 
 def _extract_from_pdf(content: bytes) -> str:

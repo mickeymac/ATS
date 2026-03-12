@@ -140,7 +140,14 @@ class ApplicationInDB(ApplicationCreate):
     candidate_skills: List[str] = []
     candidate_certifications: List[str] = []
     candidate_summary: Optional[str] = None
-    extraction_method: Optional[str] = None  # "llm" or "regex"
+    extraction_method: Optional[str] = None  # "llamaparse_groq", "mistral_7b", or "regex"
+    extraction_tier: Optional[int] = None  # 1=LlamaParse+Groq, 2=Mistral7B, 3=Regex
+    
+    # NEW: Rich extraction data from Smart Extractor
+    experience_details: Optional[List[Dict[str, Any]]] = None  # Company-by-company breakdown
+    domain_experience: Optional[List[Dict[str, Any]]] = None  # Domain categorization
+    awards: Optional[List[str]] = None  # Awards/certifications from LLM
+    education_details: Optional[List[Dict[str, Any]]] = None  # Detailed education info
     
     # File hash for duplicate detection
     file_hash: Optional[str] = None

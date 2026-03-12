@@ -3,6 +3,7 @@ from typing import List, Optional
 from app.core.deps import get_current_active_user, check_role, get_db
 from app.schemas.user import UserInDB, UserRole
 from app.schemas.notification import NotificationType
+from app.services.socket_manager import emit_notification, emit_batch_created, emit_batch_completed
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
@@ -136,6 +137,29 @@ async def send_for_review(
                 "candidate_count": len(application_ids)
             }
         )
+        # Emit socket notification for real-time delivery
+        await emit_notification(tl_id, {
+            "type": NotificationType.REVIEW_REQUEST.value,
+            "title": "New Review Request",
+            "message": f"{current_user.name or current_user.email} sent {len(application_ids)} candidate(s) for review",
+            "data": {
+                "batch_id": batch_id,
+                "recruiter_id": current_user.id,
+                "recruiter_name": current_user.name or current_user.email,
+                "candidate_count": len(application_ids)
+            }
+        })
+    
+    # Emit batch created event for real-time batch list update
+    await emit_batch_created(team_lead_ids, {
+        "batch_id": batch_id,
+        "recruiter_id": current_user.id,
+        "recruiter_name": current_user.name or current_user.email,
+        "candidate_count": len(application_ids),
+        "job_titles": list(job_titles),
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat()
+    })
     
     return {
         "success": True,
@@ -326,6 +350,18 @@ async def complete_review(
                     "no_selection": True
                 }
             )
+            # Emit socket notification
+            await emit_notification(recruiter_id, {
+                "type": NotificationType.REVIEW_COMPLETED.value,
+                "title": "No Candidates Selected",
+                "message": f"Team Lead has reviewed your candidates. Unfortunately, no candidates were selected for approval.",
+                "data": {
+                    "batch_id": batch_id,
+                    "approved_count": 0,
+                    "not_selected_count": len(not_selected_ids),
+                    "no_selection": True
+                }
+            })
         else:
             await _create_notification(
                 db,
@@ -339,6 +375,26 @@ async def complete_review(
                     "not_selected_count": len(not_selected_ids)
                 }
             )
+            # Emit socket notification
+            await emit_notification(recruiter_id, {
+                "type": NotificationType.REVIEW_COMPLETED.value,
+                "title": "Review Completed",
+                "message": f"Team Lead has reviewed your candidates. {len(approved_ids)} approved, {len(not_selected_ids)} not selected.",
+                "data": {
+                    "batch_id": batch_id,
+                    "approved_count": len(approved_ids),
+                    "not_selected_count": len(not_selected_ids)
+                }
+            })
+        
+        # Emit batch completed event for real-time update
+        await emit_batch_completed(recruiter_id, {
+            "batch_id": batch_id,
+            "completed_by": current_user.id,
+            "completed_by_name": current_user.name or current_user.email,
+            "approved_count": len(approved_ids),
+            "not_selected_count": len(not_selected_ids)
+        })
     
     return {
         "success": True,
