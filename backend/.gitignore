@@ -1,0 +1,33 @@
+
+
+# Security - Environment & Secrets
+.env
+.env.*
+*.env
+secrets.json
+credentials.json
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Uploads (contains user resumes)
+uploads/
+
+# Build & Dependencies
+dist/
+build/
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/

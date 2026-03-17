@@ -1,0 +1,34 @@
+# Core Framework
+fastapi
+uvicorn
+motor
+pydantic[email]
+pydantic-settings
+
+# Authentication
+passlib[bcrypt]
+python-jose[cryptography]
+
+# File Handling
+python-multipart
+python-docx
+pdfplumber
+aiofiles
+
+# Utilities
+python-dotenv
+
+# WebSockets
+python-socketio
+
+# Tier 1: Groq LLM Extraction
+groq
+nest-asyncio
+
+# Tier 2: HuggingFace Extraction (Mistral 7B)
+langchain-huggingface
+huggingface_hub
+
+# PDF & OCR Processing
+pymupdf
+easyocr
