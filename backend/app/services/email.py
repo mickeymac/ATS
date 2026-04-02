@@ -27,3 +27,8 @@ async def send_status_update_email(email: str, status: str, job_title: str):
     subject = f"Application Status Update: {job_title}"
     body = f"Your application for {job_title} has been updated to: {status}."
     await send_email(subject, email, body)
+
+async def send_otp_email(email: str, otp: str):
+    subject = "Your Password Reset OTP"
+    body = f"You requested a password reset. Your OTP is: {otp}\nThis OTP is valid for 10 minutes.\nIf you did not request this, please ignore this email."
+    await send_email(subject, email, body)

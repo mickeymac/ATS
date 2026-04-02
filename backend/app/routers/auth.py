@@ -4,7 +4,9 @@ from datetime import datetime, timedelta
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.core.config import settings
 from app.db.mongodb import get_db
-from app.schemas.user import UserCreate, UserInDB, Token, UserRole
+from app.schemas.user import UserCreate, UserInDB, Token, UserRole, ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
+import random
+from app.services.email import send_otp_email
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
@@ -74,4 +76,68 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncIOMot
     
     return {"access_token": access_token, "token_type": "bearer", "role": user["role"]}
 
-from datetime import datetime
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    if request.email == settings.ADMIN_EMAIL:
+        raise HTTPException(status_code=400, detail="Cannot reset password for static admin account.")
+    
+    user = await db.users.find_one({"email": request.email})
+    if not user:
+        # Prevent email enumeration by returning success even if user not found
+        return {"message": "If that email is registered, we have sent a password reset OTP."}
+    
+    # Generate 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    # Save OTP to user document
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"reset_otp": otp, "reset_otp_expires_at": expires_at}}
+    )
+    
+    # Send email
+    await send_otp_email(request.email, otp)
+    
+    return {"message": "If that email is registered, we have sent a password reset OTP."}
+
+@router.post("/verify-otp")
+async def verify_otp(request: VerifyOTPRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    user = await db.users.find_one({
+        "email": request.email,
+        "reset_otp": request.otp
+    })
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    if "reset_otp_expires_at" not in user or user["reset_otp_expires_at"] < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="OTP has expired")
+        
+    return {"message": "OTP verified successfully"}
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    user = await db.users.find_one({
+        "email": request.email,
+        "reset_otp": request.otp
+    })
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    if "reset_otp_expires_at" not in user or user["reset_otp_expires_at"] < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="OTP has expired")
+        
+    # Update password and clear OTP
+    new_password_hash = get_password_hash(request.new_password)
+    
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {"password_hash": new_password_hash},
+            "$unset": {"reset_otp": "", "reset_otp_expires_at": ""}
+        }
+    )
+    
+    return {"message": "Password reset successfully"}

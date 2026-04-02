@@ -93,7 +93,7 @@ export default function Login() {
               }}
             />
             <div className="flex justify-between items-center text-xs">
-              <Link href="#" size="sm" className="text-default-500">Forgot password?</Link>
+              <Link as={RouterLink} to="/forgot-password" size="sm" className="text-default-500">Forgot password?</Link>
             </div>
             
             <Button 

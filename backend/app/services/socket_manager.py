@@ -5,6 +5,9 @@ Provides centralized event emission for notifications, permissions, batches, etc
 
 import socketio
 from typing import Optional, Dict, Any, List
+from datetime import datetime
+from bson import ObjectId
+from app.db.mongodb import db_instance
 
 # Create Socket.IO server with async mode
 sio = socketio.AsyncServer(
@@ -41,7 +44,22 @@ async def connect(sid, environ, auth):
         user_sessions[user_id] = sid
         # Join personal room for targeted notifications
         await sio.enter_room(sid, f"user:{user_id}")
-        print(f"[Socket.IO] User {user_id} joined room user:{user_id}", flush=True)
+        
+        # Join rooms for all groups user is a member of
+        db = db_instance.db
+        if db is not None:
+            groups_cursor = db.groups.find({"members": user_id})
+            async for group in groups_cursor:
+                await sio.enter_room(sid, f"group:{str(group['_id'])}")
+        
+        print(f"[Socket.IO] User {user_id} joined room user:{user_id} and group rooms", flush=True)
+        
+        # Ext: Update online status
+        db = db_instance.db
+        if db is not None:
+            user_query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"_id": user_id}
+            await db.users.update_one(user_query, {"$set": {"is_online": True}})
+            await sio.emit('user:status', {"user_id": user_id, "is_online": True})
     else:
         print(f"[Socket.IO] No user_id in auth for {sid}", flush=True)
 
@@ -54,6 +72,14 @@ async def disconnect(sid):
     for user_id, session_sid in list(user_sessions.items()):
         if session_sid == sid:
             del user_sessions[user_id]
+            
+            # Ext: Update online status to offline
+            db = db_instance.db
+            if db is not None:
+                last_seen_time = datetime.utcnow()
+                user_query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"_id": user_id}
+                await db.users.update_one(user_query, {"$set": {"is_online": False, "last_seen": last_seen_time}})
+                await sio.emit('user:status', {"user_id": user_id, "is_online": False, "last_seen": last_seen_time.isoformat()})
             break
 
 
@@ -73,6 +99,217 @@ async def leave_room(sid, data):
     if room:
         await sio.leave_room(sid, room)
         print(f"[Socket.IO] {sid} left room: {room}")
+
+
+@sio.on('chat:send')
+async def chat_send(sid, data):
+    """
+    Handle sending a message.
+    data: {receiver_id, message_text}
+    """
+    db = db_instance.db
+    if db is None:
+        return
+        
+    sender_id = None
+    for uid, sess_id in user_sessions.items():
+        if sess_id == sid:
+            sender_id = uid
+            break
+            
+    if not sender_id:
+        return
+        
+    receiver_id = data.get("receiver_id")
+    group_id = data.get("group_id")
+    message_text = data.get("message_text")
+    file_url = data.get("file_url")
+    file_type = data.get("file_type")
+    file_name = data.get("file_name")
+    
+    if not receiver_id and not group_id:
+        return
+    if not message_text and not file_url:
+        return
+        
+    # Save to db
+    msg_doc = {
+        "sender_id": sender_id,
+        "receiver_id": receiver_id,
+        "group_id": group_id,
+        "message_text": message_text,
+        "file_url": file_url,
+        "file_type": file_type,
+        "file_name": file_name,
+        "timestamp": datetime.utcnow(),
+        "is_read": False,
+        "deleted_for": []
+    }
+    result = await db.messages.insert_one(msg_doc)
+    msg_doc["_id"] = str(result.inserted_id)
+    msg_doc["timestamp"] = msg_doc["timestamp"].isoformat()
+    
+    # Emit to receiver or group
+    if group_id:
+        await sio.emit('chat:receive', msg_doc, room=f"group:{group_id}")
+    else:
+        await sio.emit('chat:receive', msg_doc, room=f"user:{receiver_id}")
+        # Acknowledge to sender only for private chats (group receives it via broadcast)
+        await sio.emit('chat:sent', msg_doc, room=sid)
+
+@sio.on('chat:typing')
+async def chat_typing(sid, data):
+    """
+    Handle typing indicator.
+    data: {receiver_id, is_typing}
+    """
+    sender_id = None
+    for uid, sess_id in user_sessions.items():
+        if sess_id == sid:
+            sender_id = uid
+            break
+            
+    if not sender_id:
+        return
+        
+    receiver_id = data.get("receiver_id")
+    is_typing = data.get("is_typing", False)
+    
+    if receiver_id:
+        await sio.emit('chat:typing', {"sender_id": sender_id, "is_typing": is_typing}, room=f"user:{receiver_id}")
+
+@sio.on('chat:delete')
+async def chat_delete(sid, data):
+    """
+    Handle deleting a message.
+    data: {receiver_id, group_id, message_id, mode}
+    """
+    db = db_instance.db
+    if db is None:
+        return
+        
+    sender_id = None
+    for uid, sess_id in user_sessions.items():
+        if sess_id == sid:
+            sender_id = uid
+            break
+            
+    if not sender_id:
+        return
+        
+    message_id = data.get("message_id")
+    receiver_id = data.get("receiver_id")
+    group_id = data.get("group_id")
+    mode = data.get("mode", "me") # "me" or "everyone"
+    
+    if not message_id or not ObjectId.is_valid(message_id):
+        return
+        
+    msg = await db.messages.find_one({"_id": ObjectId(message_id)})
+    if not msg:
+        return
+
+    if mode == "everyone":
+        if msg["sender_id"] != sender_id:
+            return # Only sender can delete for everyone
+            
+        await db.messages.update_one(
+            {"_id": ObjectId(message_id)},
+            {"$set": {
+                "message_text": None,
+                "file_url": None,
+                "file_type": None,
+                "file_name": None,
+                "is_deleted_for_everyone": True
+            }}
+        )
+        
+        # Broadcast erasure to everyone
+        target_room = f"group:{group_id}" if group_id else f"user:{receiver_id}"
+        await sio.emit('chat:deleted', {"message_id": message_id, "mode": "everyone"}, room=target_room)
+        # Also notify sender
+        await sio.emit('chat:deleted', {"message_id": message_id, "mode": "everyone"}, room=sid)
+        
+    else: # mode == "me"
+        await db.messages.update_one(
+            {"_id": ObjectId(message_id)},
+            {"$addToSet": {"deleted_for": sender_id}}
+        )
+        # Notify only the sender
+        await sio.emit('chat:deleted', {"message_id": message_id, "mode": "me"}, room=sid)
+
+@sio.on('chat:clear')
+async def chat_clear(sid, data):
+    """
+    Handle clearing a chat history entirely.
+    data: {receiver_id}
+    """
+    db = db_instance.db
+    if db is None:
+        return
+        
+    sender_id = None
+    for uid, sess_id in user_sessions.items():
+        if sess_id == sid:
+            sender_id = uid
+            break
+            
+    if not sender_id:
+        return
+        
+    receiver_id = data.get("receiver_id")
+    group_id = data.get("group_id")
+    
+    if not receiver_id and not group_id:
+        return
+        
+    # Asymmetric soft wipe: Add requester to 'deleted_for' list
+    query = {}
+    if group_id:
+        query = {"group_id": group_id}
+    else:
+        query = {
+            "$or": [
+                {"sender_id": sender_id, "receiver_id": receiver_id},
+                {"sender_id": receiver_id, "receiver_id": sender_id}
+            ]
+        }
+
+    await db.messages.update_many(query, {
+        "$addToSet": {"deleted_for": sender_id}
+    })
+    
+    # Notify the sender to clear their local UI
+    await sio.emit('chat:cleared', {
+        "contact_id": group_id or receiver_id,
+        "group_id": group_id
+    }, room=sid)
+    
+@sio.on('chat:group_update')
+async def chat_group_update(sid, data):
+    """
+    Broadcast that a group has been updated (name, etc)
+    data: {group_id}
+    """
+    group_id = data.get("group_id")
+    if group_id:
+        await sio.emit('chat:group_updated', {"group_id": group_id}, room=f"group:{group_id}")
+
+@sio.on('chat:member_change')
+async def chat_member_change(sid, data):
+    """
+    Broadcast that members were added/removed
+    data: {group_id, user_id, action: 'added' | 'removed'}
+    """
+    group_id = data.get("group_id")
+    user_id = data.get("user_id")
+    action = data.get("action")
+    if group_id:
+        if action == 'removed' and user_id:
+            # Notify the specific user they were removed
+            await sio.emit('chat:membership_revoked', {"group_id": group_id}, room=f"user:{user_id}")
+            
+        await sio.emit('chat:group_updated', {"group_id": group_id}, room=f"group:{group_id}")
 
 
 # =====================

@@ -29,6 +29,12 @@ async def create_indexes():
     await db.applications.create_index("final_score")
     await db.applications.create_index([("job_id", 1), ("candidate_email", 1)])  # Compound index for duplicate detection
     
+    # Messages collection indexes for Chat
+    await db.messages.create_index("sender_id")
+    await db.messages.create_index("receiver_id")
+    await db.messages.create_index("timestamp")
+    await db.messages.create_index("is_read")
+    
     # Notifications collection indexes
     await db.notifications.create_index("user_id")
     await db.notifications.create_index("read")

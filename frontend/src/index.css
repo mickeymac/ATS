@@ -2,21 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  color: var(--foreground);
-  background-color: var(--background);
+  color: hsl(var(--nextui-foreground));
+  background-color: hsl(var(--nextui-background));
   background-image:
     radial-gradient(circle at 8% 10%, hsl(var(--nextui-primary) / 0.08) 0%, transparent 36%),
     radial-gradient(circle at 92% 90%, hsl(var(--nextui-secondary) / 0.08) 0%, transparent 34%),

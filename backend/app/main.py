@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
-from app.routers import auth, users, jobs, applications, review, notifications
+from app.routers import auth, users, jobs, applications, review, notifications, chat
 from app.services.socket_manager import create_socket_app
 import os
 
@@ -47,6 +47,7 @@ app.include_router(jobs.router, prefix=f"{settings.API_V1_STR}/jobs", tags=["job
 app.include_router(applications.router, prefix=f"{settings.API_V1_STR}/applications", tags=["applications"])
 app.include_router(review.router, prefix=f"{settings.API_V1_STR}/review", tags=["review"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
+app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
 
 # Static files - serve uploaded resumes
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
@@ -58,5 +59,9 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 def read_root():
     return {"message": "Welcome to AI-Powered ATS API"}
 
-# Create Socket.IO wrapped ASGI app - this is what uvicorn should run
-socket_asgi_app = create_socket_app(app)
+# Re-bind app so `uvicorn app.main:app` loads the Socket.IO wrapped app
+from app.services.socket_manager import sio
+import socketio
+
+fastapi_app = app
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app, socketio_path='socket.io')

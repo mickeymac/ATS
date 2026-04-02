@@ -37,6 +37,7 @@ export const AuthProvider = ({ children }) => {
             const profile = await fetchUserProfile();
             if (profile) {
               setUser({ 
+                id: profile.id || profile._id || decoded.user_id,
                 email: profile.email || decoded.sub, 
                 role: profile.role || decoded.role,
                 name: profile.name,
@@ -44,7 +45,7 @@ export const AuthProvider = ({ children }) => {
                 permissions: profile.permissions || {}
               });
             } else {
-              setUser({ email: decoded.sub, role: decoded.role, permissions: {} });
+              setUser({ id: decoded.user_id, email: decoded.sub, role: decoded.role, permissions: {} });
             }
           }
         } catch {
@@ -68,6 +69,7 @@ export const AuthProvider = ({ children }) => {
       const profile = await fetchUserProfile();
       if (profile) {
         setUser({ 
+          id: profile.id || profile._id,
           email: profile.email || email, 
           role: profile.role || role,
           name: profile.name,
@@ -75,7 +77,7 @@ export const AuthProvider = ({ children }) => {
           permissions: profile.permissions || {}
         });
       } else {
-        setUser({ email, role, permissions: {} });
+        setUser({ email, role, permissions: {} }); // ID won't instantly be known without profile here, but profile expects to succeed
       }
       return { success: true };
     } catch (error) {
@@ -99,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     if (userData) {
       setUser(prev => ({
         ...prev,
+        id: userData.id || userData._id || prev?.id,
         email: userData.email || prev?.email,
         name: userData.name || prev?.name,
         role: userData.role || prev?.role,

@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext';
 import { SocketProvider, useSocket } from './context/SocketContext';
 import { useEffect } from 'react';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import Landing from './pages/Landing';
 import Jobs from './pages/Jobs';
@@ -19,27 +20,37 @@ import Settings from './pages/Settings';
 import Permissions from './pages/Permissions';
 import Unauthorized from './pages/Unauthorized';
 import ProtectedRoute from './components/ProtectedRoute';
+import ChatAssistant from './components/ChatAssistant';
+import Chat from './pages/Chat';
+import { ChatProvider, useChatContext } from './context/ChatContext';
 
 // Bridge component to connect socket events to auth context
 function SocketAuthBridge() {
   const { subscribe, isConnected } = useSocket();
   const { updatePermissions } = useAuth();
+  const { fetchUnreadTotal } = useChatContext();
 
   useEffect(() => {
     if (!isConnected) return;
 
     // Listen for permission updates
-    const unsubscribe = subscribe('permission:updated', (data) => {
+    const unsubscribePerm = subscribe('permission:updated', (data) => {
       console.log('[SocketAuthBridge] Permission updated:', data);
       if (data?.permissions) {
         updatePermissions(data.permissions);
       }
     });
+    
+    // Listen for chat messages globally to increment unread count
+    const unsubscribeChat = subscribe('chat:receive', () => {
+      fetchUnreadTotal();
+    });
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribePerm) unsubscribePerm();
+      if (unsubscribeChat) unsubscribeChat();
     };
-  }, [isConnected, subscribe, updatePermissions]);
+  }, [isConnected, subscribe, updatePermissions, fetchUnreadTotal]);
 
   return null; // This component only handles side effects
 }
@@ -50,12 +61,15 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <SocketProvider>
-            <SocketAuthBridge />
-            <ToastProvider>
+            <ChatProvider>
+              <SocketAuthBridge />
+              <ToastProvider>
               <Router>
+                <ChatAssistant />
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/register" element={<Navigate to="/login" replace />} />
 
                   <Route element={<ProtectedRoute />}>
@@ -69,12 +83,14 @@ function App() {
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/permissions" element={<Permissions />} />
+                    <Route path="/chat" element={<Chat />} />
                   </Route>
 
                   <Route path="/unauthorized" element={<Unauthorized />} />
                 </Routes>
               </Router>
             </ToastProvider>
+            </ChatProvider>
           </SocketProvider>
         </AuthProvider>
       </ThemeProvider>

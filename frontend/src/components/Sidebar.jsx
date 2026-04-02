@@ -12,14 +12,17 @@ import {
   UserCircle2,
   Upload,
   ClipboardCheck,
-  Shield
+  Shield,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
+import { useChatContext } from '../context/ChatContext';
 import { Logo } from './Logo';
 
 const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'Chat', icon: MessageSquare, href: '/chat', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Jobs', icon: Briefcase, href: '/jobs', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Applications', icon: FileText, href: '/applications', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'My Uploads', icon: Upload, href: '/my-uploads', roles: ['recruiter'] },
@@ -35,6 +38,7 @@ export function Sidebar({ isCollapsed = false, toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, hasPermission } = useAuth();
+  const { unreadTotal } = useChatContext();
 
   const handleLogout = () => {
     logout();
@@ -79,8 +83,24 @@ export function Sidebar({ isCollapsed = false, toggleSidebar }) {
               )}
               title={isCollapsed ? item.name : undefined}
             >
-              <item.icon className={cn("h-5 w-5 shrink-0", isActive ? "text-primary" : "text-default-600 dark:text-default-400 group-hover:text-foreground dark:group-hover:text-foreground")} />
-              {!isCollapsed && <span>{item.name}</span>}
+              <div className="relative">
+                <item.icon className={cn("h-5 w-5 shrink-0", isActive ? "text-primary" : "text-default-600 dark:text-default-400 group-hover:text-foreground dark:group-hover:text-foreground")} />
+                {item.name === 'Chat' && unreadTotal > 0 && isCollapsed && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[9px] font-bold text-white shadow-sm ring-2 ring-content1">
+                    {unreadTotal > 9 ? '9+' : unreadTotal}
+                  </span>
+                )}
+              </div>
+              {!isCollapsed && (
+                <div className="flex flex-1 items-center justify-between">
+                  <span>{item.name}</span>
+                  {item.name === 'Chat' && unreadTotal > 0 && (
+                    <span className="flex h-5 items-center justify-center rounded-full bg-danger px-1.5 text-[10px] font-bold text-white shadow-sm">
+                      {unreadTotal > 99 ? '99+' : unreadTotal}
+                    </span>
+                  )}
+                </div>
+              )}
             </Link>
           );
         })}
