@@ -1,12 +1,7 @@
 # ===========================
 # SECURITY - SENSITIVE FILES
 # ===========================
-.env
-.env.*
 *.env
-.env.local
-.env.production
-.env.development
 *.key
 *.pem
 *.crt
@@ -84,7 +79,6 @@ log/
 # IDE & EDITORS
 # ===========================
 .idea/
-.vscode/
 *.swp
 *.swo
 *.sublime-*
@@ -125,3 +119,4 @@ dump.rdb
 *.temp
 .cache/
 coverage/
+config.bat
