@@ -25,6 +25,17 @@ class Settings(BaseSettings):
     MAIL_PORT: int = int(os.getenv("MAIL_PORT", 587))
     MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.gmail.com")
 
+    # Backblaze B2 Integration
+    B2_KEY_ID: str = os.getenv("B2_KEY_ID", "")
+    B2_APPLICATION_KEY: str = os.getenv("B2_APPLICATION_KEY", "")
+    B2_BUCKET_NAME: str = os.getenv("B2_BUCKET_NAME", "")
+    B2_ENDPOINT: str = os.getenv("B2_ENDPOINT", "")
+
+    # Zoom Integration
+    ZOOM_CLIENT_ID: str = os.getenv("ZOOM_CLIENT_ID", "")
+    ZOOM_CLIENT_SECRET: str = os.getenv("ZOOM_CLIENT_SECRET", "")
+    ZOOM_ACCOUNT_ID: str = os.getenv("ZOOM_ACCOUNT_ID", "")
+
     class Config:
         case_sensitive = True
 

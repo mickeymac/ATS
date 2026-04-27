@@ -109,7 +109,7 @@ const Profile = () => {
     { label: 'Account Role', value: profile?.role || user.role, icon: Shield },
     { label: 'Phone Number', value: profile?.phone || 'Not provided', icon: Phone },
     { label: 'Department', value: profile?.department || defaultDepartment, icon: Briefcase },
-    { label: 'Team Lead', value: profile?.team_lead || 'Not assigned', icon: Users },
+    ...(user.role === 'recruiter' ? [{ label: 'Team Lead', value: profile?.team_lead || 'Not assigned', icon: Users }] : []),
     { label: 'Joined Date', value: profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '-', icon: Calendar },
   ];
 
@@ -396,7 +396,18 @@ const Profile = () => {
                     value={formState.phone}
                     onValueChange={(v) => setFormState({ ...formState, phone: v })}
                     startContent={<Phone size={16} className="text-default-400" />}
-                    className="sm:col-span-2"
+                    classNames={{
+                      label: "font-bold text-default-700",
+                      inputWrapper: "bg-default-100/50"
+                    }}
+                  />
+                  <Input
+                    label="Department"
+                    labelPlacement="outside"
+                    placeholder="e.g. Talent Acquisition"
+                    value={formState.department}
+                    onValueChange={(v) => setFormState({ ...formState, department: v })}
+                    startContent={<Briefcase size={16} className="text-default-400" />}
                     classNames={{
                       label: "font-bold text-default-700",
                       inputWrapper: "bg-default-100/50"

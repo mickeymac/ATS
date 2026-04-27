@@ -18,6 +18,7 @@ DEFAULT_PERMISSIONS = {
         "can_assign_jobs": True,
         "can_self_assign_recruiters": True,
         "can_send_interview_invites": True,
+        "can_schedule_interviews": True,
         "can_export_data": True,
         "can_manage_users": True,
         "can_manage_permissions": True,
@@ -29,6 +30,7 @@ DEFAULT_PERMISSIONS = {
         "can_assign_jobs": False,
         "can_self_assign_recruiters": True,
         "can_send_interview_invites": True,
+        "can_schedule_interviews": True,
         "can_export_data": True,
         "can_manage_users": False,
         "can_manage_permissions": False,
@@ -40,6 +42,7 @@ DEFAULT_PERMISSIONS = {
         "can_assign_jobs": False,
         "can_self_assign_recruiters": False,
         "can_send_interview_invites": False,
+        "can_schedule_interviews": False,
         "can_export_data": False,
         "can_manage_users": False,
         "can_manage_permissions": False,
@@ -54,6 +57,7 @@ class UserPermissions(BaseModel):
     can_assign_jobs: bool = False
     can_self_assign_recruiters: bool = False
     can_send_interview_invites: bool = False
+    can_schedule_interviews: bool = False
     can_export_data: bool = False
     can_manage_users: bool = False
     can_manage_permissions: bool = False

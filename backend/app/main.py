@@ -4,8 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
-from app.routers import auth, users, jobs, applications, review, notifications, chat
+from app.routers import auth, users, jobs, applications, review, notifications, chat, interviews
 from app.services.socket_manager import create_socket_app
+from app.services.interview_reminder import check_upcoming_interviews
+import asyncio
 import os
 
 app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json")
@@ -14,7 +16,7 @@ app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/o
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://localhost:5174",
+    "http://localhost:5174"
 ]
 
 app.add_middleware(
@@ -30,6 +32,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     await connect_to_mongo()
+    asyncio.create_task(check_upcoming_interviews())
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -48,6 +51,7 @@ app.include_router(applications.router, prefix=f"{settings.API_V1_STR}/applicati
 app.include_router(review.router, prefix=f"{settings.API_V1_STR}/review", tags=["review"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
 app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
+app.include_router(interviews.router, prefix=f"{settings.API_V1_STR}/interviews", tags=["interviews"])
 
 # Static files - serve uploaded resumes
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")

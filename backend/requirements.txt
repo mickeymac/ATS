@@ -32,3 +32,6 @@ huggingface_hub
 # PDF & OCR Processing
 pymupdf
 easyocr
+
+# Backblaze B2 Integration
+boto3

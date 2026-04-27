@@ -77,7 +77,9 @@ class ApplicationBase(BaseModel):
 
 class ApplicationCreate(ApplicationBase):
     uploaded_by: Optional[str] = None  # HR/Admin who uploaded the resume
-    resume_file_path: str
+    file_name: Optional[str] = None
+    resume_url: Optional[str] = None
+    profile_image_url: Optional[str] = None
     extracted_text: Optional[str] = None
 
 class CandidateExtractedData(BaseModel):

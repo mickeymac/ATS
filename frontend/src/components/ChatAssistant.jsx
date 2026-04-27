@@ -191,7 +191,7 @@ export default function ChatAssistant() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (location.pathname.startsWith('/chat')) {
+  if (location.pathname === '/' || location.pathname.startsWith('/chat')) {
     return null;
   }
 

@@ -278,6 +278,7 @@ class Tier1Extractor:
         prompt = f"""
 You are an expert Resume Parser. Convert the following Resume content into a structured JSON object.
 IMPORTANT: Return ONLY a valid JSON object. Do not include any introductory text, explanations, or markdown formatting tags.
+CRITICAL RULE: If a specific field is not found in the text, return null or an empty string. Do NOT return placeholders like "Full Name" or "Email Address".
 
 REQUIRED JSON SCHEMA:
 {{
@@ -316,7 +317,7 @@ RESUME CONTENT:
                 {"role": "system", "content": "You are a specialized resume parser that always returns valid JSON."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             temperature=0.1,
             stream=False,
             response_format={"type": "json_object"}
@@ -325,7 +326,7 @@ RESUME CONTENT:
         raw_content = chat_completion.choices[0].message.content
         return json.loads(raw_content)
     
-    async def extract(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+    async def extract(self, file_content: bytes, filename: str, resume_text: str = "") -> Dict[str, Any]:
         """
         Extract resume data using local PDF extraction + Groq.
         Returns structured data with domain analysis.
@@ -333,8 +334,9 @@ RESUME CONTENT:
         if not self.is_available():
             raise ValueError("Tier 1 extraction not available - missing GROQ_API_KEY")
         
-        # Step 1: Extract text from PDF
-        resume_text = self._extract_text_from_pdf(file_content)
+        # Step 1: Use provided text or extract from PDF locally if not provided
+        if not resume_text:
+            resume_text = self._extract_text_from_pdf(file_content)
         
         if not resume_text or len(resume_text.strip()) < 100:
             raise ValueError(f"Could not extract sufficient text from PDF (got {len(resume_text)} chars)")
@@ -367,12 +369,27 @@ RESUME CONTENT:
         
         # Normalize output to match HR ATS expected format
         personal_info = structured_data.get("personal_info", {})
+        
+        # Clean up possible placeholder output mistakes
+        raw_name = personal_info.get("name", "Unknown")
+        if raw_name in ["Full Name", "First Last", "Candidate Name", "Name", None, ""]:
+            raw_name = "Unknown"
+            
+        raw_email = personal_info.get("email", "")
+        if raw_email in ["Email Address", "Email", "user@example.com", None]:
+            raw_email = ""
+            
+        raw_phone = personal_info.get("phone", "")
+        if raw_phone in ["Phone Number", "Phone", None]:
+            raw_phone = ""
+            
         links = personal_info.get("links", [])
         
         # Extract LinkedIn and GitHub from links
         linkedin_url = ""
         github_url = ""
         for link in links:
+            if not isinstance(link, str): continue
             link_lower = link.lower()
             if "linkedin" in link_lower:
                 linkedin_url = link
@@ -381,9 +398,9 @@ RESUME CONTENT:
         
         # Build normalized result
         result = {
-            "name": personal_info.get("name", "Unknown"),
-            "email": personal_info.get("email", ""),
-            "phone": personal_info.get("phone", ""),
+            "name": raw_name,
+            "email": raw_email,
+            "phone": raw_phone,
             "linkedin_url": linkedin_url,
             "github_url": github_url,
             "skills": structured_data.get("skills", []),
@@ -550,7 +567,7 @@ class SmartExtractor:
         if self.tier1.is_available() and filename.lower().endswith(('.pdf', '.docx','.txt','.png','.jpg','.jpeg','.gif','.webp')):
             try:
                 logger.info("SmartExtractor: Attempting Tier 1 (PyMuPDF + Groq)...")
-                result = await self.tier1.extract(file_content, filename)
+                result = await self.tier1.extract(file_content, filename, resume_text)
                 logger.info("SmartExtractor: Tier 1 successful!")
                 return result
             except Exception as e:

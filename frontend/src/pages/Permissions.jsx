@@ -40,6 +40,7 @@ const PERMISSION_LABELS = {
   can_assign_jobs: 'Assign Jobs',
   can_self_assign_recruiters: 'Self-Assign Recruiters',
   can_send_interview_invites: 'Send Interview Invites',
+  can_schedule_interviews: 'Schedule Interviews',
   can_export_data: 'Export Data',
   can_manage_users: 'Manage Users',
   can_manage_permissions: 'Manage Permissions'

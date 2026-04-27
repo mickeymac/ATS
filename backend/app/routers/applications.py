@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body, Query
+from fastapi.responses import StreamingResponse, FileResponse
 from typing import List, Optional
 from app.core.deps import get_current_active_user, check_role, get_db
 from app.schemas.job import ApplicationCreate, ApplicationInDB, ApplicationStatus
 from app.schemas.user import UserInDB, UserRole
-from app.services.resume_extractor import extract_text_from_bytes
+from app.services.resume_extractor import extract_text_from_bytes, extract_profile_picture_from_pdf
 from app.services.smart_extractor import smart_extract_candidate_info
 from app.services.scoring_engine import evaluate_application_v2
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -13,6 +14,8 @@ import os
 import aiofiles
 import uuid
 import hashlib
+import time
+from app.services.b2_storage_service import upload_resume_to_b2, delete_resume_from_b2
 
 router = APIRouter()
 
@@ -37,6 +40,16 @@ async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
         if job:
             app["job_title"] = job.get("title")
 
+    # Sanitize fields that might mistakenly be stored as lists
+    for field in ["candidate_email", "candidate_phone", "candidate_name_extracted"]:
+        if isinstance(app.get(field), list):
+            app[field] = str(app[field][0]) if app[field] else None
+            
+    # Sanitize lists containing null/None values from LLM extractions
+    for list_field in ["candidate_skills", "candidate_education", "matched_skills", "missing_skills"]:
+        if isinstance(app.get(list_field), list):
+            app[list_field] = [x for x in app[list_field] if x is not None]
+
     return app
 
 @router.post("/upload", response_model=ApplicationInDB)
@@ -52,22 +65,32 @@ async def upload_resume(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Save file
-    file_ext = file.filename.split(".")[-1]
-    file_name = f"{uuid.uuid4()}.{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, file_name)
-    
     # Read file content ONCE
     file_content = await file.read()
+    
+    # Validate file type and size
+    file_ext = file.filename.split(".")[-1].lower()
+    if file_ext not in ["pdf", "doc", "docx"]:
+        raise HTTPException(status_code=400, detail="Only PDF, DOC, and DOCX files are allowed.")
+        
+    if len(file_content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds the 5MB limit.")
     
     # Generate file hash for duplicate detection
     file_hash = hashlib.md5(file_content).hexdigest()
     
-    # Save file to disk
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        await out_file.write(file_content)
+    # Check by file hash to detect exact duplicate files early
+    existing_by_hash = await db.applications.find_one({
+        "job_id": job_id,
+        "file_hash": file_hash
+    })
+    if existing_by_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="This exact resume file has already been uploaded for this job"
+        )
     
-    # Extract text and parsed data using the already-read bytes
+    # Extract text and parsed data using the bytes
     extracted_text = ""
     parsed_candidate_data = {}
     
@@ -104,26 +127,47 @@ async def upload_resume(
             "candidate_email": candidate_email
         })
         if existing_app:
-            # Clean up uploaded file since it's a duplicate
-            if os.path.exists(file_path):
-                os.remove(file_path)
             raise HTTPException(
                 status_code=400, 
                 detail=f"A resume for candidate with email '{candidate_email}' already exists for this job"
             )
+            
+    # Build safely formatted filename for Drive
+    candidate_name = parsed_candidate_data.get("name")
+    if candidate_name:
+        safe_name = "".join([c if c.isalpha() or c.isdigit() else "_" for c in candidate_name]).strip("_").lower()
+    else:
+        safe_name = "unknown_candidate"
+        
+    timestamp = int(time.time())
+    drive_filename = f"{safe_name}_{timestamp}.{file_ext}"
     
-    # Also check by file hash to detect exact duplicate files
-    existing_by_hash = await db.applications.find_one({
-        "job_id": job_id,
-        "file_hash": file_hash
-    })
-    if existing_by_hash:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(
-            status_code=400,
-            detail="This exact resume file has already been uploaded for this job"
-        )
+    # Extract & Upload Profile Picture
+    profile_image_url = None
+    if file_ext == "pdf":
+        try:
+            profile_pic_bytes = extract_profile_picture_from_pdf(file_content)
+            if profile_pic_bytes:
+                pic_filename = f"{safe_name}_{timestamp}_profile.jpg"
+                _, profile_image_url = await upload_resume_to_b2(profile_pic_bytes, pic_filename, "image/jpeg")
+                print(f"✓ Profile picture extracted and uploaded: {profile_image_url}")
+        except Exception as e:
+            print(f"✗ Profile picture extraction/upload error: {e}")
+            
+    # Upload to Backblaze B2
+    try:
+        if file_ext == "pdf":
+            drive_mime = "application/pdf"
+        elif file_ext == "doc":
+            drive_mime = "application/msword"
+        else:
+            drive_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            
+        file_name, file_url = await upload_resume_to_b2(file_content, drive_filename, drive_mime)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"B2 upload failed: {str(e)}")
     
     # Production scoring v2
     try:
@@ -151,7 +195,9 @@ async def upload_resume(
         "job_id": job_id,
         "uploaded_by": current_user.id,  # HR/Admin who uploaded the resume
         "job_title": job.get("title"),
-        "resume_file_path": file_path,
+        "file_name": file_name,
+        "resume_url": file_url,
+        "profile_image_url": profile_image_url,
         "extracted_text": extracted_text,
         
         # Scores (raw 0-100 scale)
@@ -306,6 +352,42 @@ async def get_job_applications(
         "limit": limit
     }
 
+@router.get("/{application_id}/resume")
+async def download_resume(
+    application_id: str,
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Fetch the resume directly from Backblaze B2 (or local fallback) and proxy it securely."""
+    if not ObjectId.is_valid(application_id):
+        raise HTTPException(status_code=400, detail="Invalid application ID")
+        
+    app = await db.applications.find_one({"_id": ObjectId(application_id)})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    # Proxy from B2
+    file_name = app.get("file_name")
+    if file_name:
+        from app.services.b2_storage_service import get_b2_client
+        import botocore
+        from app.core.config import settings
+        
+        b2_client = get_b2_client()
+        try:
+            response = b2_client.get_object(Bucket=settings.B2_BUCKET_NAME, Key=f"resumes/{file_name}")
+            return StreamingResponse(response['Body'], media_type=response.get('ContentType', 'application/pdf'))
+        except botocore.exceptions.ClientError as e:
+            print(f"B2 Fetch Error: {e}")
+            raise HTTPException(status_code=404, detail="Resume file not found in cloud storage")
+            
+    # Fallback to legacy local
+    resume_path = app.get("resume_file_path")
+    if resume_path and os.path.exists(resume_path):
+        return FileResponse(resume_path)
+        
+    raise HTTPException(status_code=404, detail="Resume file is not available")
+
 @router.put("/{application_id}/status", response_model=ApplicationInDB)
 async def update_application_status(
     application_id: str,
@@ -421,13 +503,21 @@ async def delete_application(
             detail="Cannot delete application that is currently under review"
         )
     
-    # Delete the resume file from disk
+    # Delete the resume file from B2
+    file_name = app.get("file_name")
+    if file_name:
+        try:
+            await delete_resume_from_b2(file_name)
+        except Exception as e:
+            print(f"Warning: Could not delete resume file from B2 {file_name}: {e}")
+            
+    # As a fallback, try to delete the old local format if it exists
     resume_path = app.get("resume_file_path")
     if resume_path and os.path.exists(resume_path):
         try:
             os.remove(resume_path)
         except Exception as e:
-            print(f"Warning: Could not delete resume file {resume_path}: {e}")
+            print(f"Warning: Could not delete old resume file {resume_path}: {e}")
     
     # Delete the application from database
     await db.applications.delete_one({"_id": ObjectId(application_id)})
@@ -473,7 +563,15 @@ async def bulk_delete_applications(
             skipped_count += 1
             continue
         
-        # Delete resume file
+        # Delete from B2
+        file_name = app.get("file_name")
+        if file_name:
+            try:
+                await delete_resume_from_b2(file_name)
+            except Exception:
+                pass
+                
+        # Delete old local resume file if exists
         resume_path = app.get("resume_file_path")
         if resume_path and os.path.exists(resume_path):
             try:

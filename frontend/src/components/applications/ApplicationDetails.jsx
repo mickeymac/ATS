@@ -1,4 +1,5 @@
 import React from 'react';
+import { getInitials } from '../../utils/helpers';
 import { 
   Chip, 
   Divider, 
@@ -38,7 +39,7 @@ const statusColorMap = {
   'Rejected': 'danger',
 };
 
-export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
+export function ApplicationDetails({ application, onStatusUpdate, onScheduleInterview, isHR }) {
   if (!application) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-default-50/30">
@@ -56,15 +57,17 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
   const candidateSkills = application.candidate_skills || application.matched_skills || [];
   const matchedSkills = application.matched_skills || [];
   const missingSkills = application.missing_skills || [];
+  const displayScore = application.final_score || application.match_score || 0;
+
 
   return (
-    <div className="flex h-full flex-col gap-8 overflow-y-auto p-6 custom-scrollbar bg-white">
+    <div className="flex h-full flex-col gap-8 overflow-y-auto p-6 custom-scrollbar bg-transparent">
       {/* Premium Profile Header */}
       <div className="relative">
         <div className="flex items-center gap-5">
           <Avatar
-            src={`https://i.pravatar.cc/150?u=${application._id}`}
-            name={application.candidate_name_extracted?.charAt(0) || '?'}
+            name={getInitials(application.candidate_name_extracted)}
+            showFallback={true}
             size="lg"
             isBordered
             color="primary"
@@ -124,24 +127,24 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
             </div>
             <div className="flex flex-col items-end">
               <span className={`text-3xl font-black leading-none ${
-                application.final_score >= 80 ? 'text-success' : 
-                application.final_score >= 60 ? 'text-warning' : 'text-danger'
+                displayScore >= 80 ? 'text-success' : 
+                displayScore >= 60 ? 'text-warning' : 'text-danger'
               }`}>
-                {application.final_score?.toFixed(0) || 0}%
+                {displayScore?.toFixed(0) || 0}%
               </span>
               <span className="text-[10px] font-bold text-default-400 uppercase tracking-tighter mt-1">Overall Compatibility</span>
             </div>
           </div>
           
           <Progress 
-            value={application.final_score || 0} 
-            color={application.final_score >= 80 ? 'success' : application.final_score >= 60 ? 'warning' : 'danger'} 
+            value={displayScore || 0} 
+            color={displayScore >= 80 ? 'success' : displayScore >= 60 ? 'warning' : 'danger'} 
             className="h-3 mb-8 shadow-inner"
             size="lg"
           />
 
           <div className="grid grid-cols-1 gap-4">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-divider/50 shadow-sm group hover:border-primary/30 transition-colors">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-content1 dark:bg-default-50 border border-divider/50 shadow-sm group hover:border-primary/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/5 text-primary group-hover:scale-110 transition-transform">
                   <Star size={16} />
@@ -153,7 +156,7 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
               </span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-divider/50 shadow-sm group hover:border-secondary/30 transition-colors">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-content1 dark:bg-default-50 border border-divider/50 shadow-sm group hover:border-secondary/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/5 text-secondary group-hover:scale-110 transition-transform">
                   <Briefcase size={16} />
@@ -165,7 +168,7 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
               </span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-divider/50 shadow-sm group hover:border-warning/30 transition-colors">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-content1 dark:bg-default-50 border border-divider/50 shadow-sm group hover:border-warning/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-warning/5 text-warning group-hover:scale-110 transition-transform">
                   <GraduationCap size={16} />
@@ -196,7 +199,7 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
                 <p className="text-[10px] font-black text-success-600 uppercase mb-3 tracking-widest">Strengths Found</p>
                 <div className="flex flex-wrap gap-2">
                   {matchedSkills.map((skill) => (
-                    <Chip key={skill} size="sm" variant="dot" color="success" className="bg-white border-success-200 font-bold h-7 px-3">
+                    <Chip key={skill} size="sm" variant="dot" color="success" className="bg-content1 dark:bg-default-50 border-success-200 font-bold h-7 px-3">
                       {skill}
                     </Chip>
                   ))}
@@ -209,7 +212,7 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
                 <p className="text-[10px] font-black text-danger-600 uppercase mb-3 tracking-widest">Potential Gaps</p>
                 <div className="flex flex-wrap gap-2">
                   {missingSkills.map((skill) => (
-                    <Chip key={skill} size="sm" variant="dot" color="danger" className="bg-white border-danger-200 font-bold h-7 px-3">
+                    <Chip key={skill} size="sm" variant="dot" color="danger" className="bg-content1 dark:bg-default-50 border-danger-200 font-bold h-7 px-3">
                       {skill}
                     </Chip>
                   ))}
@@ -236,45 +239,41 @@ export function ApplicationDetails({ application, onStatusUpdate, isHR }) {
         </div>
       </div>
 
-       {/* Floating Sticky Actions */}
+       {/* Action Buttons */}
        {isHR && (
-         <div className="sticky bottom-2 left-0 right-0 z-20 mt-auto">
-           <Card className="bg-white/80 backdrop-blur-md border border-divider shadow-2xl overflow-hidden">
-             <CardBody className="p-3 flex items-center gap-3">
-               <Button 
-                 color="success" 
-                 variant="shadow"
-                 className="flex-1 font-black uppercase text-xs h-12 shadow-success-200" 
-                 startContent={<CheckCircle size={18} />}
-                 onPress={() => onStatusUpdate(application._id, 'Shortlisted')}
-                 isDisabled={application.status === 'Shortlisted'}
-               >
-                 Shortlist
-               </Button>
-               <Button 
-                 color="primary" 
-                 variant="flat"
-                 className="flex-1 font-black uppercase text-xs h-12 bg-primary/10" 
-                 startContent={<Calendar size={18} />}
-                 onPress={() => onStatusUpdate(application._id, 'Interview Scheduled')}
-                 isDisabled={application.status === 'Interview Scheduled'}
-               >
-                 Schedule
-               </Button>
-               <Tooltip content="Reject Candidate">
-                 <Button 
-                   color="danger" 
-                   variant="flat" 
-                   isIconOnly
-                   className="h-12 w-12 bg-danger/10 min-w-0"
-                   onPress={() => onStatusUpdate(application._id, 'Rejected')}
-                   isDisabled={application.status === 'Rejected'}
-                 >
-                   <XCircle size={20} />
-                 </Button>
-               </Tooltip>
-             </CardBody>
-           </Card>
+         <div className="mt-4 pt-6 border-t border-divider flex items-center gap-3">
+           <Button 
+             color="success" 
+             variant="flat"
+             className="flex-1 font-bold h-11"
+             startContent={<CheckCircle size={18} />}
+             onPress={() => onStatusUpdate(application._id, 'Shortlisted')}
+             isDisabled={application.status === 'Shortlisted'}
+           >
+             Shortlist
+           </Button>
+           <Button 
+             color="primary" 
+             variant="flat"
+             className="flex-1 font-bold h-11"
+             startContent={<Calendar size={18} />}
+             onPress={onScheduleInterview}
+             isDisabled={application.status === 'Interview Scheduled'}
+           >
+             Schedule
+           </Button>
+           <Tooltip content="Reject Candidate">
+             <Button 
+               color="danger" 
+               variant="flat" 
+               isIconOnly
+               className="h-11 w-11 shrink-0"
+               onPress={() => onStatusUpdate(application._id, 'Rejected')}
+               isDisabled={application.status === 'Rejected'}
+             >
+               <XCircle size={20} />
+             </Button>
+           </Tooltip>
          </div>
        )}
     </div>

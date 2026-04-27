@@ -13,6 +13,8 @@ const getFileUrl = (url) => {
   return url;
 };
 
+const parseDate = (d) => new Date(typeof d === 'string' && !d.endsWith('Z') ? d + 'Z' : d);
+
 export default function ChatSidebar({ contacts, activeContactId, onSelectContact, searchQuery, setSearchQuery, onGroupCreated }) {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [groupName, setGroupName] = useState('');
@@ -108,7 +110,7 @@ export default function ChatSidebar({ contacts, activeContactId, onSelectContact
                 <span className="font-semibold text-sm truncate">{contact.name}</span>
                 {contact.last_message_time && (
                   <span className="text-xs text-default-400 whitespace-nowrap">
-                    {new Date(contact.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {parseDate(contact.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
               </div>

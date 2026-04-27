@@ -6,6 +6,7 @@ import { AppShell } from '../components/AppShell';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { TableSkeleton } from '../components/SkeletonLoaders';
 import { exportToCSV, formatLastUpdated } from '../utils/export';
+import { getInitials } from '../utils/helpers';
 import { ApplicationList } from '../components/applications/ApplicationList';
 import { ApplicationDetails } from '../components/applications/ApplicationDetails';
 import { ResumeViewer } from '../components/applications/ResumeViewer';
@@ -63,6 +64,7 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const statusColorMap = {
   'Applied': 'default',
@@ -96,6 +98,16 @@ export default function Applications() {
   const [showDetails, setShowDetails] = useState(true);
 
   const isRecruiter = user?.role === 'recruiter';
+  const navigate = useNavigate();
+
+  const handleScheduleInterviewNavigation = (app) => {
+    navigate('/interviews', { state: { 
+      candidate_name: app.candidate_name_extracted,
+      candidate_email: app.candidate_email,
+      application_id: app._id,
+      job_title: app.job_title
+    }});
+  };
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -362,6 +374,7 @@ export default function Applications() {
                   <ApplicationDetails 
                     application={selectedApplication} 
                     onStatusUpdate={handleUpdateStatus}
+                    onScheduleInterview={() => handleScheduleInterviewNavigation(selectedApplication)}
                     isHR={isHR}
                   />
                 </div>
@@ -440,9 +453,9 @@ export default function Applications() {
                         <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 w-12"></th>
                         <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Candidate</th>
                         <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Position</th>
-                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Status</th>
-                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Match Score</th>
-                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Review Progress</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[160px]">Status</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[140px]">Match Score</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[180px]">Review Progress</th>
                         <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Date</th>
                       </tr>
                     </thead>
@@ -462,7 +475,8 @@ export default function Applications() {
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-3">
                                 <Avatar 
-                                  name={app.candidate_name_extracted?.charAt(0) || '?'} 
+                                  name={getInitials(app.candidate_name_extracted)} 
+                                  showFallback={true}
                                   size="sm"
                                   isBordered
                                   className="w-8 h-8 text-xs font-bold"
@@ -483,7 +497,7 @@ export default function Applications() {
                                 <span className="text-[10px] font-medium text-default-400 uppercase tracking-tighter">Target Role</span>
                               </div>
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 min-w-[160px]">
                               <Chip 
                                 size="sm" 
                                 variant="flat" 
@@ -512,7 +526,7 @@ export default function Applications() {
                                 />
                               </div>
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 min-w-[180px]">
                               <ReviewStepper 
                                 reviewStatus={app.review_status || 'pending'}
                                 reviewedAt={app.reviewed_at}
@@ -694,10 +708,10 @@ export default function Applications() {
                                             <p className="text-[10px] font-bold text-primary-600 uppercase mb-2">All Candidate Skills</p>
                                             <div className="flex flex-wrap gap-1.5">
                                               {app.candidate_skills.slice(0, 10).map((skill, idx) => (
-                                                <Chip key={idx} size="sm" variant="flat" color="primary" className="h-6 text-[10px]">{skill}</Chip>
+                                                <Chip key={idx} size="sm" variant="flat" color="primary" className="h-auto py-1 whitespace-normal text-wrap text-[10px]">{skill}</Chip>
                                               ))}
                                               {app.candidate_skills.length > 10 && (
-                                                <Chip size="sm" variant="flat" className="h-6 text-[10px]">+{app.candidate_skills.length - 10} more</Chip>
+                                                <Chip size="sm" variant="flat" className="h-auto py-1 whitespace-normal text-wrap text-[10px]">+{app.candidate_skills.length - 10} more</Chip>
                                               )}
                                             </div>
                                           </div>
@@ -716,7 +730,7 @@ export default function Applications() {
                                               </Button>
                                             </Tooltip>
                                             <Tooltip content="Schedule Interview">
-                                              <Button isIconOnly size="md" color="primary" variant="flat" className="bg-primary-50 dark:bg-primary-50" onPress={() => handleUpdateStatus(app._id, 'Interview Scheduled')}>
+                                              <Button isIconOnly size="md" color="primary" variant="flat" className="bg-primary-50 dark:bg-primary-50" onPress={() => handleScheduleInterviewNavigation(app)}>
                                                 <Clock size={18} />
                                               </Button>
                                             </Tooltip>
@@ -772,7 +786,8 @@ export default function Applications() {
               <ModalHeader className="flex flex-col gap-1 py-4">
                 <div className="flex items-center gap-4">
                   <Avatar 
-                    name={selectedApp.candidate_name_extracted?.charAt(0) || '?'} 
+                    name={getInitials(selectedApp.candidate_name_extracted)} 
+                    showFallback={true}
                     size="md"
                     isBordered
                     color="primary"
@@ -986,8 +1001,8 @@ export default function Applications() {
                 </div>
               </ModalHeader>
               <ModalBody className="p-0 bg-default-100/30">
-                <div className="h-[calc(100vh-8rem)] w-full overflow-hidden p-8 flex justify-center">
-                  <div className="h-full w-full max-w-5xl rounded-2xl border border-divider bg-white shadow-2xl overflow-y-auto custom-scrollbar p-10">
+                <div className="h-[calc(100vh-8rem)] w-full overflow-hidden bg-default-100/30">
+                  <div className="h-full w-full bg-white overflow-y-auto custom-scrollbar">
                     <ResumeViewer application={resumePreviewApp || selectedApplication} />
                   </div>
                 </div>

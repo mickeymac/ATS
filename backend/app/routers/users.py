@@ -274,7 +274,7 @@ async def update_user_permissions(
     valid_permissions = [
         "can_create_jobs", "can_delete_jobs", "can_activate_jobs",
         "can_assign_jobs", "can_self_assign_recruiters", "can_send_interview_invites",
-        "can_export_data", "can_manage_users", "can_manage_permissions"
+        "can_schedule_interviews", "can_export_data", "can_manage_users", "can_manage_permissions"
     ]
     
     for key in permissions.keys():

@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, Chip, Progress, Card, CardBody, Avatar } from '@nextui-org/react';
 import { ChevronRight, Star, Briefcase, Mail, Clock } from 'lucide-react';
+import { getInitials } from '../../utils/helpers';
 
 const statusColorMap = {
   'Applied': 'default',
@@ -41,8 +42,8 @@ export function ApplicationList({ applications, selectedId, onSelect }) {
             <div className="flex items-start justify-between w-full">
               <div className="flex items-center gap-3">
                 <Avatar
-                  src={`https://i.pravatar.cc/150?u=${app._id}`}
-                  name={app.candidate_name_extracted?.charAt(0) || '?'}
+                  name={getInitials(app.candidate_name_extracted)}
+                  showFallback={true}
                   size="md"
                   isBordered
                   color={selectedId === app._id ? "primary" : "default"}

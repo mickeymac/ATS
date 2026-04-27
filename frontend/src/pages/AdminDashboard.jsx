@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
+import { getInitials } from '../utils/helpers';
 import api from '../services/api';
-import { 
-  Card, 
-  CardBody, 
-  CardHeader, 
-  Table, 
-  TableHeader, 
-  TableColumn, 
-  TableBody, 
-  TableRow, 
-  TableCell, 
-  User, 
-  Chip, 
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  Table,
+  TableHeader,
+  TableColumn,
+  TableBody,
+  TableRow,
+  TableCell,
+  User,
+  Chip,
   Button,
   Modal,
   ModalContent,
@@ -49,7 +50,7 @@ const AdminDashboard = () => {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
-  
+
   // Upload resume state
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
   const [jobs, setJobs] = useState([]);
@@ -70,7 +71,7 @@ const AdminDashboard = () => {
       const jobsList = jobsData.items || jobsData;
       const appsData = appsRes.data;
       const apps = appsData.items || appsData;
-      
+
       setJobs(jobsList);
 
       const pendingStatuses = new Set(['Applied', 'Under Review']);
@@ -85,15 +86,37 @@ const AdminDashboard = () => {
 
       setRecentApps(apps.sort((a, b) => new Date(b.applied_at) - new Date(a.applied_at)).slice(0, 5));
 
-      // Chart data: Apps per month (mock for now, could be calculated from real data)
-      const monthlyData = [
-        { name: 'Jan', applicants: Math.floor(apps.length * 0.8), shortlisted: Math.floor(statsCalc.shortlisted * 0.6) },
-        { name: 'Feb', applicants: Math.floor(apps.length * 0.6), shortlisted: Math.floor(statsCalc.shortlisted * 0.3) },
-        { name: 'Mar', applicants: Math.floor(apps.length * 0.4), shortlisted: Math.floor(statsCalc.shortlisted * 0.5) },
-        { name: 'Apr', applicants: Math.floor(apps.length * 0.5), shortlisted: Math.floor(statsCalc.shortlisted * 0.8) },
-        { name: 'May', applicants: Math.floor(apps.length * 0.3), shortlisted: Math.floor(statsCalc.shortlisted * 1.0) },
-        { name: 'Jun', applicants: apps.length, shortlisted: statsCalc.shortlisted },
-      ];
+      // Chart data: Calculate actual applicants and shortlists for the last 6 months
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthlyDataMap = new Map();
+
+      // Initialize last 6 months with 0
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        monthlyDataMap.set(key, {
+          name: months[d.getMonth()],
+          applicants: 0,
+          shortlisted: 0
+        });
+      }
+
+      // Aggregate data from applications
+      apps.forEach(app => {
+        if (!app.applied_at) return;
+        const d = new Date(app.applied_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (monthlyDataMap.has(key)) {
+          const dataNode = monthlyDataMap.get(key);
+          dataNode.applicants += 1;
+          if (app.status === 'Shortlisted' || app.status === 'Selected') {
+            dataNode.shortlisted += 1;
+          }
+        }
+      });
+
+      const monthlyData = Array.from(monthlyDataMap.values());
       setChartData(monthlyData);
       setLastUpdated(new Date());
 
@@ -163,7 +186,7 @@ const AdminDashboard = () => {
             <p className="text-default-600">Loading dashboard...</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[1,2,3,4].map(i => <StatCardSkeleton key={i} />)}
+            {[1, 2, 3, 4].map(i => <StatCardSkeleton key={i} />)}
           </div>
           <TableSkeleton rows={5} columns={4} />
         </div>
@@ -193,14 +216,14 @@ const AdminDashboard = () => {
 
         {/* Action Buttons */}
         <div className="flex gap-3">
-          <Button 
-            color="primary" 
+          <Button
+            color="primary"
             startContent={<Upload size={18} />}
             onPress={onOpen}
           >
             Upload Resume
           </Button>
-          <Button 
+          <Button
             as={Link}
             to="/jobs"
             variant="bordered"
@@ -212,35 +235,35 @@ const AdminDashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatsCard 
-            title="Total Applicants" 
-            value={stats.totalApps.toString()} 
-            trend="12%" 
-            trendUp={true} 
+          <StatsCard
+            title="Total Applicants"
+            value={stats.totalApps.toString()}
+            trend="12%"
+            trendUp={true}
             icon={Users}
             color="primary"
           />
-          <StatsCard 
-            title="Shortlisted" 
-            value={stats.shortlisted.toString()} 
-            trend="5%" 
-            trendUp={true} 
+          <StatsCard
+            title="Shortlisted"
+            value={stats.shortlisted.toString()}
+            trend="5%"
+            trendUp={true}
             icon={UserCheck}
             color="success"
           />
-          <StatsCard 
-            title="Pending Review" 
-            value={stats.pending.toString()} 
-            trend="2%" 
-            trendUp={false} 
+          <StatsCard
+            title="Pending Review"
+            value={stats.pending.toString()}
+            trend="2%"
+            trendUp={false}
             icon={UserX}
             color="danger"
           />
-          <StatsCard 
-            title="Total Jobs" 
-            value={stats.totalJobs.toString()} 
-            trend="8%" 
-            trendUp={true} 
+          <StatsCard
+            title="Total Jobs"
+            value={stats.totalJobs.toString()}
+            trend="8%"
+            trendUp={true}
             icon={CalendarCheck}
             color="warning"
           />
@@ -251,7 +274,7 @@ const AdminDashboard = () => {
           <div className="xl:col-span-2">
             <ApplicationTrendsChart data={chartData} />
           </div>
-          
+
           <Card className="shadow-sm border border-divider">
             <CardHeader className="pb-0 pt-6 px-6">
               <h3 className="font-semibold text-lg text-default-900">Recent Activity</h3>
@@ -260,12 +283,13 @@ const AdminDashboard = () => {
               {recentApps.map((app) => (
                 <div key={app._id} className="flex items-center justify-between border-b border-divider pb-2 last:border-none">
                   <div className="flex items-center gap-3">
-                    <User 
-                      name={app.candidate_name_extracted || 'Unknown'} 
+                    <User
+                      name={app.candidate_name_extracted || 'Unknown'}
                       description={app.job_title}
-                      avatarProps={{ 
-                        src: `https://i.pravatar.cc/150?u=${app._id}`, 
-                        size: "sm" 
+                      avatarProps={{
+                        name: getInitials(app.candidate_name_extracted),
+                        showFallback: true,
+                        size: "sm"
                       }}
                       classNames={{
                         name: "text-default-900 font-medium",
@@ -306,48 +330,50 @@ const AdminDashboard = () => {
                 <TableColumn>DATE</TableColumn>
               </TableHeader>
               <TableBody>
-                {recentApps.map((app) => (
-                  <TableRow key={app._id}>
-                    <TableCell>
-                      <User
-                        avatarProps={{ radius: "lg", src: `https://i.pravatar.cc/150?u=${app._id}` }}
-                        name={app.candidate_name_extracted || 'Unknown'}
-                        description={app.candidate_email_extracted}
-                        classNames={{
-                          name: "text-default-900",
-                          description: "text-default-500",
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-default-900">{app.job_title}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        size="sm" 
-                        variant="flat" 
-                        color={statusColorMap[app.status] || "default"}
-                      >
-                        {app.status}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`font-semibold ${
-                        app.match_score >= 80 ? 'text-success' : 
-                        app.match_score >= 60 ? 'text-warning' : 'text-danger'
-                      }`}>
-                        {app.match_score?.toFixed(0) || 0}%
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-default-500 text-sm">
-                        {new Date(app.applied_at).toLocaleDateString()}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {recentApps.map((app) => {
+                  const displayScore = app.final_score || app.match_score || 0;
+                  return (
+                    <TableRow key={app._id}>
+                      <TableCell>
+                        <User
+                          avatarProps={{ radius: "lg", name: getInitials(app.candidate_name_extracted), showFallback: true }}
+                          name={app.candidate_name_extracted || 'Unknown'}
+                          description={app.candidate_email_extracted}
+                          classNames={{
+                            name: "text-default-900",
+                            description: "text-default-500",
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-default-900">{app.job_title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="sm"
+                          variant="flat"
+                          color={statusColorMap[app.status] || "default"}
+                        >
+                          {app.status}
+                        </Chip>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`font-semibold ${displayScore >= 80 ? 'text-success' :
+                            displayScore >= 60 ? 'text-warning' : 'text-danger'
+                          }`}>
+                          {displayScore?.toFixed(0) || 0}%
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-default-500 text-sm">
+                          {new Date(app.applied_at).toLocaleDateString()}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardBody>
@@ -403,8 +429,8 @@ const AdminDashboard = () => {
                 <Button variant="light" onPress={onClose}>
                   Cancel
                 </Button>
-                <Button 
-                  color="primary" 
+                <Button
+                  color="primary"
                   onPress={handleUploadResume}
                   isLoading={uploading}
                 >

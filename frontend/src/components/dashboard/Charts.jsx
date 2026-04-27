@@ -45,6 +45,8 @@ export function StatusDistributionChart({ data }) {
               </Pie>
               <Tooltip 
                 contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--nextui-divider))', background: 'hsl(var(--nextui-content1))' }}
+                itemStyle={{ color: 'hsl(var(--nextui-foreground))' }}
+                labelStyle={{ color: 'hsl(var(--nextui-foreground))' }}
               />
               <Legend verticalAlign="bottom" height={36}/>
             </PieChart>
@@ -92,6 +94,8 @@ export function RecruiterPerformanceChart({ data }) {
               />
               <Tooltip 
                 contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--nextui-divider))', background: 'hsl(var(--nextui-content1))' }}
+                itemStyle={{ color: 'hsl(var(--nextui-foreground))' }}
+                labelStyle={{ color: 'hsl(var(--nextui-foreground))' }}
               />
               <Legend />
               <Bar dataKey="apps" fill="hsl(var(--nextui-primary))" radius={[4, 4, 0, 0]} />
@@ -153,6 +157,8 @@ export function ApplicationTrendsChart({ data }) {
               />
               <Tooltip 
                 contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--nextui-divider))', background: 'hsl(var(--nextui-content1))' }}
+                itemStyle={{ color: 'hsl(var(--nextui-foreground))' }}
+                labelStyle={{ color: 'hsl(var(--nextui-foreground))' }}
               />
               <Area 
                 type="monotone" 

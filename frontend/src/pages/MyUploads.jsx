@@ -353,10 +353,16 @@ export default function MyUploads() {
       { key: 'job_title', label: 'Job Title' },
       { key: 'status', label: 'Status' },
       { key: 'review_status', label: 'Review Status' },
-      { key: 'fit_score', label: 'Fit Score' },
+      { key: 'display_score', label: 'Fit Score' },
       { key: 'created_at', label: 'Uploaded At' }
     ];
-    exportToCSV(filteredUploads, 'my-uploads', columns);
+    
+    const exportData = filteredUploads.map(app => ({
+      ...app,
+      display_score: app.final_score || app.match_score || 0
+    }));
+    
+    exportToCSV(exportData, 'my-uploads', columns);
     addToast('Uploads exported successfully.', 'success');
   };
 
@@ -686,7 +692,7 @@ export default function MyUploads() {
         {/* Uploads List with Expandable Rows */}
         <Card className="border border-divider overflow-hidden">
           {/* Header Row */}
-          <div className="grid grid-cols-12 gap-2 p-4 bg-default-100 border-b border-divider text-xs font-semibold text-default-600 uppercase">
+          <div className={`grid gap-2 p-4 bg-default-100 border-b border-divider text-xs font-semibold text-default-600 uppercase ${selectedTab === 'needs_review' ? 'grid-cols-[repeat(13,minmax(0,1fr))]' : 'grid-cols-12'}`}>
             <div className="col-span-1 flex items-center justify-center">
               {(selectedTab === 'needs_review' || selectedTab === 'not_selected') && (
                 <div className="flex flex-col items-center">
@@ -711,10 +717,10 @@ export default function MyUploads() {
                 />
               </div>
             )}
-            <div className={`${selectedTab === 'needs_review' ? 'col-span-2' : 'col-span-3'}`}>Candidate</div>
+            <div className="col-span-2">Candidate</div>
             <div className="col-span-2">Job</div>
             <div className="col-span-1">Score</div>
-            <div className="col-span-1">Status</div>
+            <div className="col-span-2 min-w-[130px]">Status</div>
             <div className="col-span-2">Workflow</div>
             <div className="col-span-1">Date</div>
             <div className="col-span-1">Expand</div>
@@ -737,10 +743,12 @@ export default function MyUploads() {
           )}
 
           {/* Data Rows */}
-          {filteredUploads.map((app) => (
+          {filteredUploads.map((app) => {
+            const displayScore = app.final_score || app.match_score || 0;
+            return (
             <div key={app._id} className="border-b border-divider last:border-b-0">
               {/* Main Row */}
-              <div className="grid grid-cols-12 gap-2 p-4 items-center hover:bg-default-50 transition-colors">
+              <div className={`grid gap-2 p-4 items-center hover:bg-default-50 transition-colors ${selectedTab === 'needs_review' ? 'grid-cols-[repeat(13,minmax(0,1fr))]' : 'grid-cols-12'}`}>
                 <div className="col-span-1 flex items-center justify-center">
                   {(selectedTab === 'needs_review' || selectedTab === 'not_selected') ? (
                     <Checkbox
@@ -763,7 +771,7 @@ export default function MyUploads() {
                     />
                   </div>
                 )}
-                <div className={`${selectedTab === 'needs_review' ? 'col-span-2' : 'col-span-3'}`}>
+                <div className="col-span-2">
                   <p className="font-medium text-default-900 text-sm">{app.candidate_name_extracted || 'Unknown'}</p>
                   <p className="text-xs text-default-500">{app.candidate_email || 'No email'}</p>
                 </div>
@@ -772,16 +780,16 @@ export default function MyUploads() {
                 </div>
                 <div className="col-span-1">
                   <div className="flex items-center gap-1">
-                    <Star size={12} className={app.final_score >= 80 ? 'text-success fill-success' : app.final_score >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
+                    <Star size={12} className={displayScore >= 80 ? 'text-success fill-success' : displayScore >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
                     <span className={`font-semibold text-sm ${
-                      app.final_score >= 80 ? 'text-success' : 
-                      app.final_score >= 60 ? 'text-warning' : 'text-danger'
+                      displayScore >= 80 ? 'text-success' : 
+                      displayScore >= 60 ? 'text-warning' : 'text-danger'
                     }`}>
-                      {app.final_score?.toFixed(0) || 0}%
+                      {displayScore?.toFixed(0) || 0}%
                     </span>
                   </div>
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2 min-w-[130px]">
                   <Chip
                     size="sm"
                     variant="flat"
@@ -938,10 +946,10 @@ export default function MyUploads() {
                         </h4>
                         <div className="flex flex-wrap gap-1">
                           {app.candidate_skills?.slice(0, 8).map((skill, idx) => (
-                            <Chip key={idx} size="sm" variant="flat" color="primary">{skill}</Chip>
+                            <Chip key={idx} size="sm" variant="flat" color="primary" className="h-auto py-1 whitespace-normal text-wrap">{skill}</Chip>
                           ))}
                           {app.candidate_skills?.length > 8 && (
-                            <Chip size="sm" variant="bordered">+{app.candidate_skills.length - 8} more</Chip>
+                            <Chip size="sm" variant="bordered" className="h-auto py-1 whitespace-normal text-wrap">+{app.candidate_skills.length - 8} more</Chip>
                           )}
                         </div>
                       </div>
@@ -1000,7 +1008,7 @@ export default function MyUploads() {
                 </div>
               )}
             </div>
-          ))}
+          );})}
         </Card>
 
         {/* Resume Preview Modal */}
@@ -1016,10 +1024,12 @@ export default function MyUploads() {
                 <ModalHeader>
                   Resume Preview - {selectedApp?.candidate_name_extracted}
                 </ModalHeader>
-                <ModalBody className="pb-6">
-                  {selectedApp && (
-                    <ResumeViewer application={selectedApp} />
-                  )}
+                <ModalBody className="p-0">
+                  <div className="h-[calc(100vh-10rem)] w-full">
+                    {selectedApp && (
+                      <ResumeViewer application={selectedApp} />
+                    )}
+                  </div>
                 </ModalBody>
               </>
             )}

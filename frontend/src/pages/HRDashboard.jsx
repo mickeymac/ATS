@@ -26,6 +26,7 @@ import {
   Progress,
   Tooltip
 } from '@nextui-org/react';
+import { getInitials } from '../utils/helpers';
 import { AppShell } from '../components/AppShell';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { StatCardSkeleton, TableSkeleton } from '../components/SkeletonLoaders';
@@ -94,15 +95,37 @@ const HRDashboard = () => {
 
       setRecentApps(apps.sort((a, b) => new Date(b.applied_at) - new Date(a.applied_at)).slice(0, 5));
 
-      // Chart data: Apps per month (mock for now, could be calculated from real data)
-      const monthlyData = [
-        { name: 'Jan', applicants: Math.floor(apps.length * 0.8), shortlisted: Math.floor(statsCalc.shortlisted * 0.6) },
-        { name: 'Feb', applicants: Math.floor(apps.length * 0.6), shortlisted: Math.floor(statsCalc.shortlisted * 0.3) },
-        { name: 'Mar', applicants: Math.floor(apps.length * 0.4), shortlisted: Math.floor(statsCalc.shortlisted * 0.5) },
-        { name: 'Apr', applicants: Math.floor(apps.length * 0.5), shortlisted: Math.floor(statsCalc.shortlisted * 0.8) },
-        { name: 'May', applicants: Math.floor(apps.length * 0.3), shortlisted: Math.floor(statsCalc.shortlisted * 1.0) },
-        { name: 'Jun', applicants: apps.length, shortlisted: statsCalc.shortlisted },
-      ];
+      // Chart data: Calculate actual applicants and shortlists for the last 6 months
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthlyDataMap = new Map();
+      
+      // Initialize last 6 months with 0
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        monthlyDataMap.set(key, {
+          name: months[d.getMonth()],
+          applicants: 0,
+          shortlisted: 0
+        });
+      }
+
+      // Aggregate data from applications
+      apps.forEach(app => {
+        if (!app.applied_at) return;
+        const d = new Date(app.applied_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (monthlyDataMap.has(key)) {
+          const dataNode = monthlyDataMap.get(key);
+          dataNode.applicants += 1;
+          if (app.status === 'Shortlisted' || app.status === 'Selected') {
+            dataNode.shortlisted += 1;
+          }
+        }
+      });
+      
+      const monthlyData = Array.from(monthlyDataMap.values());
       setChartData(monthlyData);
       setLastUpdated(new Date());
 
@@ -289,8 +312,8 @@ const HRDashboard = () => {
                     <div key={app._id} className="flex items-center justify-between group">
                       <div className="flex items-center gap-3">
                         <Avatar 
-                          src={`https://i.pravatar.cc/150?u=${app._id}`} 
-                          name={app.candidate_name_extracted?.charAt(0)}
+                          name={getInitials(app.candidate_name_extracted)}
+                          showFallback={true}
                           size="sm"
                           isBordered
                           className="w-10 h-10 border-2 border-background shadow-sm"
@@ -363,13 +386,15 @@ const HRDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-divider/50">
-                {recentApps.map((app) => (
+                {recentApps.map((app) => {
+                  const displayScore = app.final_score || app.match_score || 0;
+                  return (
                   <tr key={app._id} className="group hover:bg-default-50 dark:hover:bg-default-100/50 transition-colors cursor-pointer" onClick={() => {}}>
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
                         <Avatar 
-                          src={`https://i.pravatar.cc/150?u=${app._id}`} 
-                          name={app.candidate_name_extracted?.charAt(0)}
+                          name={getInitials(app.candidate_name_extracted)}
+                          showFallback={true}
                           size="sm"
                           isBordered
                           className="w-10 h-10 text-xs font-bold"
@@ -402,17 +427,17 @@ const HRDashboard = () => {
                       <div className="flex flex-col gap-1.5 w-24">
                         <div className="flex items-center justify-between">
                           <span className={`text-xs font-bold ${
-                            app.match_score >= 80 ? 'text-success' : 
-                            app.match_score >= 60 ? 'text-warning' : 'text-danger'
+                            displayScore >= 80 ? 'text-success' : 
+                            displayScore >= 60 ? 'text-warning' : 'text-danger'
                           }`}>
-                            {app.match_score?.toFixed(0) || 0}%
+                            {displayScore?.toFixed(0) || 0}%
                           </span>
-                          <Users size={12} className={app.match_score >= 80 ? 'text-success' : app.match_score >= 60 ? 'text-warning' : 'text-danger'} />
+                          <Users size={12} className={displayScore >= 80 ? 'text-success' : displayScore >= 60 ? 'text-warning' : 'text-danger'} />
                         </div>
                         <Progress 
                           size="sm" 
-                          value={app.match_score || 0} 
-                          color={app.match_score >= 80 ? 'success' : app.match_score >= 60 ? 'warning' : 'danger'}
+                          value={displayScore || 0} 
+                          color={displayScore >= 80 ? 'success' : displayScore >= 60 ? 'warning' : 'danger'}
                           className="h-1.5"
                         />
                       </div>
@@ -426,7 +451,7 @@ const HRDashboard = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </CardBody>

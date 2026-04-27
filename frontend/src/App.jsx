@@ -22,6 +22,7 @@ import Unauthorized from './pages/Unauthorized';
 import ProtectedRoute from './components/ProtectedRoute';
 import ChatAssistant from './components/ChatAssistant';
 import Chat from './pages/Chat';
+import Interviews from './pages/Interviews';
 import { ChatProvider, useChatContext } from './context/ChatContext';
 
 // Bridge component to connect socket events to auth context
@@ -84,6 +85,7 @@ function App() {
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/permissions" element={<Permissions />} />
                     <Route path="/chat" element={<Chat />} />
+                    <Route path="/interviews" element={<Interviews />} />
                   </Route>
 
                   <Route path="/unauthorized" element={<Unauthorized />} />

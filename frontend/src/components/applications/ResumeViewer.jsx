@@ -1,5 +1,7 @@
-import { Card, CardBody, Button } from '@nextui-org/react';
+import { Card, CardBody, Button, Spinner } from '@nextui-org/react';
 import { FileText, Download, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import api from '../../services/api';
 
 export function ResumeViewer({ application }) {
   if (!application) {
@@ -10,16 +12,54 @@ export function ResumeViewer({ application }) {
     );
   }
 
-  // Construct the PDF URL from the file path
-  const getResumeUrl = () => {
-    if (!application.resume_file_path) return null;
-    // The backend stores paths like "uploads/uuid.pdf"
-    // We serve static files at /uploads/
-    const fileName = application.resume_file_path.replace('uploads/', '').replace('uploads\\', '');
-    return `http://127.0.0.1:8000/uploads/${fileName}`;
-  };
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const pdfUrl = getResumeUrl();
+  const getIsWordDoc = (app) => {
+    if (!app) return false;
+    const urlStr = (app.file_name || app.resume_url || app.resume_file_path || '').toLowerCase();
+    return urlStr.includes('.doc') || urlStr.includes('.docx') || urlStr.includes('wordprocessing');
+  };
+  const isWordDoc = getIsWordDoc(application);
+
+  useEffect(() => {
+    let blobUrl = null;
+    
+    const fetchResume = async () => {
+      if (!application?._id) return;
+      
+      // Only attempt fetch if an identifier exists
+      if (!application.file_name && !application.resume_url && !application.resume_file_path) {
+        setPdfUrl(null);
+        return;
+      }
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await api.get(`/applications/${application._id}/resume`, {
+          responseType: 'blob'
+        });
+        blobUrl = URL.createObjectURL(response.data);
+        setPdfUrl(blobUrl);
+      } catch (err) {
+        console.error("Failed to load resume", err);
+        setError("Could not load resume document.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchResume();
+    
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [application]);
 
   const handleDownload = () => {
     if (pdfUrl) {
@@ -41,7 +81,19 @@ export function ResumeViewer({ application }) {
   return (
     <Card className="h-full w-full border-none shadow-none bg-transparent">
       <CardBody className="p-0 h-full">
-        {pdfUrl ? (
+        {loading ? (
+          <div className="h-full w-full flex flex-col items-center justify-center p-6">
+            <Spinner size="lg" color="primary" />
+            <p className="mt-4 text-default-500">Retrieving resume securely from cloud storage...</p>
+          </div>
+        ) : error ? (
+          <div className="h-full w-full flex flex-col items-center justify-center p-6">
+             <div className="text-center text-danger">
+                 <FileText size={48} className="mx-auto mb-4 opacity-50 text-danger" />
+                 <p>{error}</p>
+             </div>
+          </div>
+        ) : pdfUrl ? (
           <div className="w-full h-full flex flex-col rounded-xl overflow-hidden border border-default-200 bg-white shadow-sm">
             <div className="px-4 py-3 bg-default-50 border-b border-divider flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
@@ -61,11 +113,28 @@ export function ResumeViewer({ application }) {
                   </Button>
                 </div>
             </div>
-            <iframe 
-                src={pdfUrl} 
-                className="w-full h-full bg-white"
-                title="Resume PDF"
-            />
+            {isWordDoc ? (
+              <div className="w-full h-full overflow-y-auto bg-default-100 dark:bg-default-50/50 p-6 doc-preview-scroll">
+                <div className="max-w-4xl mx-auto bg-white dark:bg-default-100 shadow-lg rounded-xl border border-divider p-8 min-h-full">
+                  <div className="bg-warning-50 dark:bg-warning-50/10 text-warning-800 dark:text-warning-500 p-4 rounded-xl border border-warning-200 dark:border-warning-200/20 mb-8 flex gap-3 text-sm">
+                    <FileText className="shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Word Document Text Preview</p>
+                      <p className="mt-1 opacity-90">Visual formatting is not natively supported for Word files in browsers. The extracted raw text is displayed below. Use the Download button to view the original file.</p>
+                    </div>
+                  </div>
+                  <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-default-800 select-text">
+                    {application.extracted_text || "No text could be extracted from this document."}
+                  </div>
+                </div>
+              </div>
+            ) : (
+                <iframe 
+                    src={pdfUrl} 
+                    className="w-full h-full bg-white"
+                    title="Resume PDF"
+                />
+            )}
           </div>
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center p-6">

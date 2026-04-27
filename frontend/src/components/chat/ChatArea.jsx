@@ -16,6 +16,8 @@ const getFileUrl = (url) => {
   return url;
 };
 
+const parseDate = (d) => new Date(typeof d === 'string' && !d.endsWith('Z') ? d + 'Z' : d);
+
 // Default working animated stickers
 const DEFAULT_STICKERS = [
   "https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif",
@@ -346,7 +348,7 @@ export default function ChatArea({ contact, messages, onSendMessage, onDeleteMes
               ) : (
                 <span className="opacity-70">
                   {contact.last_seen 
-                    ? `Last seen ${new Date(contact.last_seen).toLocaleDateString()} ${new Date(contact.last_seen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                    ? `Last seen ${parseDate(contact.last_seen).toLocaleDateString()} ${parseDate(contact.last_seen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
                     : 'Offline'}
                 </span>
               )}
@@ -458,7 +460,7 @@ export default function ChatArea({ contact, messages, onSendMessage, onDeleteMes
                   )}
                   
                   <div className={`text-[10px] mt-1 text-right flex items-center justify-end gap-1 ${isMe ? 'text-primary-100' : 'text-default-400'}`}>
-                    <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>{parseDate(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     {isMe && (
                       <span className="inline-block ml-0.5">
                         {msg.is_read ? '✓✓' : '✓'}
@@ -679,7 +681,7 @@ export default function ChatArea({ contact, messages, onSendMessage, onDeleteMes
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-default-500 font-medium">Last Active</span>
                     <span className="font-semibold text-foreground">
-                      {contact?.last_seen ? new Date(contact.last_seen).toLocaleString() : 'N/A'}
+                      {contact?.last_seen ? parseDate(contact.last_seen).toLocaleString() : 'N/A'}
                     </span>
                   </div>
                 </div>

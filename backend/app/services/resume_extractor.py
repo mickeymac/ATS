@@ -339,6 +339,57 @@ async def extract_text_from_file(file: UploadFile) -> str:
     return normalized_text
 
 
+def extract_profile_picture_from_pdf(content: bytes) -> bytes:
+    """
+    Extracts the most likely profile picture from the first page of a PDF.
+    Returns the image bytes or None.
+    """
+    if not PYMUPDF_AVAILABLE:
+        return None
+
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+        if len(doc) == 0:
+            return None
+        
+        # Only look at the first page for profile pictures
+        page = doc[0]
+        image_list = page.get_images(full=True)
+        
+        best_image_bytes = None
+        best_image_score = -1
+
+        for img in image_list:
+            xref = img[0]
+            base_image = doc.extract_image(xref)
+            if not base_image:
+                continue
+            
+            image_bytes = base_image["image"]
+            width = base_image["width"]
+            height = base_image["height"]
+            
+            # Filter out tiny icons and massive background graphics
+            if width < 80 or height < 80 or width > 800 or height > 800:
+                continue
+                
+            # Profile pictures are usually somewhat square / portrait
+            aspect_ratio = width / height
+            if aspect_ratio < 0.5 or aspect_ratio > 1.5:
+                continue
+                
+            # Score based on size (prefer decently sized images)
+            score = width * height
+            if score > best_image_score:
+                best_image_score = score
+                best_image_bytes = image_bytes
+                
+        doc.close()
+        return best_image_bytes
+    except Exception as e:
+        logger.warning(f"Profile picture extraction failed: {e}")
+        return None
+
 def _extract_from_pdf_pymupdf(content: bytes) -> str:
     """Extract text from PDF using pymupdf (fitz) - faster than pdfplumber."""
     print("_extract_from_pdf_pymupdf: Starting extraction with pymupdf...")
@@ -564,13 +615,13 @@ def _normalize_text(text: str) -> str:
 
     # Restore placeholders
     for i, email in enumerate(emails):
-        text_with_placeholders = text_with_placeholders.replace(f"__EMAIL_{i}__", email)
+        text_with_placeholders = text_with_placeholders.replace(f"__email_{i}__", email)
 
     for i, url in enumerate(urls):
-        text_with_placeholders = text_with_placeholders.replace(f"__URL_{i}__", url)
+        text_with_placeholders = text_with_placeholders.replace(f"__url_{i}__", url)
 
     for i, phone in enumerate(phones):
-        text_with_placeholders = text_with_placeholders.replace(f"__PHONE_{i}__", phone)
+        text_with_placeholders = text_with_placeholders.replace(f"__phone_{i}__", phone)
 
     return text_with_placeholders.strip()
 
