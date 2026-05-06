@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
-from app.routers import auth, users, jobs, applications, review, notifications, chat, interviews
+from app.routers import auth, users, jobs, applications, review, notifications, chat, interviews, search
 from app.services.socket_manager import create_socket_app
 from app.services.interview_reminder import check_upcoming_interviews
 import asyncio
@@ -52,6 +52,7 @@ app.include_router(review.router, prefix=f"{settings.API_V1_STR}/review", tags=[
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
 app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
 app.include_router(interviews.router, prefix=f"{settings.API_V1_STR}/interviews", tags=["interviews"])
+app.include_router(search.router, prefix=f"{settings.API_V1_STR}/search", tags=["search"])
 
 # Static files - serve uploaded resumes
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")

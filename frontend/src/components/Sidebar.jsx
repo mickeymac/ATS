@@ -14,7 +14,8 @@ import {
   ClipboardCheck,
   Shield,
   MessageSquare,
-  Calendar
+  Calendar,
+  Database
 } from 'lucide-react';
 import { cn } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,7 @@ const menuItems = [
   { name: 'Chat', icon: MessageSquare, href: '/chat', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Jobs', icon: Briefcase, href: '/jobs', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Applications', icon: FileText, href: '/applications', roles: ['admin', 'team_lead', 'recruiter'] },
+  { name: 'Resume Database', icon: Database, href: '/database', roles: ['admin', 'team_lead', 'recruiter'] },
   { name: 'Interviews', icon: Calendar, href: '/interviews', roles: ['admin', 'team_lead', 'recruiter'], permission: 'can_schedule_interviews' },
   { name: 'My Uploads', icon: Upload, href: '/my-uploads', roles: ['recruiter'] },
   { name: 'Review', icon: ClipboardCheck, href: '/review', roles: ['team_lead', 'admin'] },

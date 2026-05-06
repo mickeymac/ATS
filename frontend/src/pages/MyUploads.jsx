@@ -54,7 +54,8 @@ import {
   MessageSquare,
   Eye,
   Briefcase,
-  Download
+  Download,
+  Bookmark
 } from 'lucide-react';
 
 const statusColorMap = {
@@ -87,6 +88,8 @@ export default function MyUploads() {
   const [stats, setStats] = useState({ today: 0, week: 0, month: 0, year: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [sendingForReview, setSendingForReview] = useState(false);
+  const [isMarkingOnHold, setIsMarkingOnHold] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
@@ -178,6 +181,8 @@ export default function MyUploads() {
         return reviewStatus === 'not_selected';
       case 'sent_for_review':
         return reviewStatus === 'sent_for_review';
+      case 'on_hold':
+        return reviewStatus === 'on_hold';
       default:
         return true;
     }
@@ -202,6 +207,7 @@ export default function MyUploads() {
   const sentForReviewCount = uploads.filter(app => app.review_status === 'sent_for_review').length;
   const approvedCount = uploads.filter(app => app.review_status === 'approved').length;
   const notSelectedCount = uploads.filter(app => app.review_status === 'not_selected').length;
+  const onHoldCount = uploads.filter(app => app.review_status === 'on_hold').length;
 
   // Handle checkbox selection
   const handleSelectAll = (isSelected) => {
@@ -318,6 +324,37 @@ export default function MyUploads() {
       addToast('Failed to reject candidates', 'error');
     } finally {
       setRejectingDirectly(false);
+    }
+  };
+
+  // Action Functions
+  const handleMarkOnHold = async () => {
+    if (selectedIds.size === 0) return;
+    setIsMarkingOnHold(true);
+    try {
+      await api.post('/review/mark-on-hold', { application_ids: Array.from(selectedIds) });
+      addToast(`Marked ${selectedIds.size} candidate(s) as on hold`, 'success');
+      setSelectedIds(new Set());
+      await fetchMyUploads();
+    } catch {
+      addToast('Failed to mark candidates on hold', 'error');
+    } finally {
+      setIsMarkingOnHold(false);
+    }
+  };
+
+  const handleRestorePending = async () => {
+    if (selectedIds.size === 0) return;
+    setIsRestoring(true);
+    try {
+      await api.post('/review/restore-pending', { application_ids: Array.from(selectedIds) });
+      addToast(`Restored ${selectedIds.size} candidate(s) to needs review`, 'success');
+      setSelectedIds(new Set());
+      await fetchMyUploads();
+    } catch {
+      addToast('Failed to restore candidates', 'error');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -491,11 +528,13 @@ export default function MyUploads() {
           selectedKey={selectedTab} 
           onSelectionChange={(key) => setSelectedTab(String(key))}
           color="primary"
-          variant="underlined"
+          variant="solid"
+          radius="full"
           classNames={{
-            tabList: "gap-6",
-            cursor: "w-full bg-primary",
-            tab: "max-w-fit px-0 h-12",
+            tabList: "gap-2 w-full sm:w-auto p-1 bg-default-100/50 shadow-inner",
+            cursor: "bg-primary shadow-sm",
+            tab: "max-w-fit px-4 h-10 transition-colors",
+            tabContent: "group-data-[selected=true]:text-white text-default-500 font-medium",
           }}
         >
           <Tab 
@@ -503,8 +542,18 @@ export default function MyUploads() {
             title={
               <div className="flex items-center gap-2">
                 <FileText size={16} />
-                <span>Candidates Need Review</span>
-                <Badge content={pendingCount} color="default" size="sm" />
+                <span>Needs Review</span>
+                <Chip size="sm" variant="flat" color={selectedTab === 'needs_review' ? "default" : "default"} className={selectedTab === 'needs_review' ? "bg-white/20 text-white" : ""}>{pendingCount}</Chip>
+              </div>
+            }
+          />
+          <Tab 
+            key="on_hold" 
+            title={
+              <div className="flex items-center gap-2">
+                <Bookmark size={16} />
+                <span>On Hold</span>
+                <Chip size="sm" variant="flat" color={selectedTab === 'on_hold' ? "default" : "secondary"} className={selectedTab === 'on_hold' ? "bg-white/20 text-white" : ""}>{onHoldCount}</Chip>
               </div>
             }
           />
@@ -513,8 +562,8 @@ export default function MyUploads() {
             title={
               <div className="flex items-center gap-2">
                 <Send size={16} />
-                <span>Sent for Review</span>
-                <Badge content={sentForReviewCount} color="warning" size="sm" />
+                <span>Sent</span>
+                <Chip size="sm" variant="flat" color={selectedTab === 'sent_for_review' ? "default" : "warning"} className={selectedTab === 'sent_for_review' ? "bg-white/20 text-white" : ""}>{sentForReviewCount}</Chip>
               </div>
             }
           />
@@ -523,8 +572,8 @@ export default function MyUploads() {
             title={
               <div className="flex items-center gap-2">
                 <CheckCircle size={16} />
-                <span>Reviewed Candidates</span>
-                <Badge content={approvedCount} color="success" size="sm" />
+                <span>Reviewed</span>
+                <Chip size="sm" variant="flat" color={selectedTab === 'reviewed' ? "default" : "success"} className={selectedTab === 'reviewed' ? "bg-white/20 text-white" : ""}>{approvedCount}</Chip>
               </div>
             }
           />
@@ -533,15 +582,15 @@ export default function MyUploads() {
             title={
               <div className="flex items-center gap-2">
                 <XCircle size={16} />
-                <span>Not Selected for Review</span>
-                <Badge content={notSelectedCount} color="danger" size="sm" />
+                <span>Not Selected</span>
+                <Chip size="sm" variant="flat" color={selectedTab === 'not_selected' ? "default" : "danger"} className={selectedTab === 'not_selected' ? "bg-white/20 text-white" : ""}>{notSelectedCount}</Chip>
               </div>
             }
           />
         </Tabs>
 
         {/* Actions Bar */}
-        {(selectedTab === 'needs_review' || selectedTab === 'not_selected') && (
+        {(selectedTab === 'needs_review' || selectedTab === 'not_selected' || selectedTab === 'on_hold') && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {selectedIds.size > 0 && (
@@ -567,6 +616,39 @@ export default function MyUploads() {
                     onPress={handleDirectReject}
                   >
                     Mark as Not Selected
+                  </Button>
+                  <Button
+                    color="secondary"
+                    variant="flat"
+                    startContent={<Bookmark size={16} />}
+                    isDisabled={selectedIds.size === 0}
+                    isLoading={isMarkingOnHold}
+                    onPress={handleMarkOnHold}
+                  >
+                    Mark as On Hold
+                  </Button>
+                  <Button
+                    color="primary"
+                    startContent={<Send size={16} />}
+                    isDisabled={selectedIds.size === 0}
+                    isLoading={sendingForReview}
+                    onPress={handleSendForReview}
+                  >
+                    Send for Review
+                  </Button>
+                </>
+              )}
+              {selectedTab === 'on_hold' && (
+                <>
+                  <Button
+                    color="default"
+                    variant="flat"
+                    startContent={<RefreshCw size={16} />}
+                    isDisabled={selectedIds.size === 0}
+                    isLoading={isRestoring}
+                    onPress={handleRestorePending}
+                  >
+                    Restore to Needs Review
                   </Button>
                   <Button
                     color="primary"
@@ -694,7 +776,7 @@ export default function MyUploads() {
           {/* Header Row */}
           <div className={`grid gap-2 p-4 bg-default-100 border-b border-divider text-xs font-semibold text-default-600 uppercase ${selectedTab === 'needs_review' ? 'grid-cols-[repeat(13,minmax(0,1fr))]' : 'grid-cols-12'}`}>
             <div className="col-span-1 flex items-center justify-center">
-              {(selectedTab === 'needs_review' || selectedTab === 'not_selected') && (
+              {(selectedTab === 'needs_review' || selectedTab === 'not_selected' || selectedTab === 'on_hold') && (
                 <div className="flex flex-col items-center">
                   <Checkbox
                     isSelected={isAllSelected}
