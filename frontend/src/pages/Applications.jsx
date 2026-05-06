@@ -62,7 +62,8 @@ import {
   GraduationCap,
   Target,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  User as UserIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -82,6 +83,7 @@ export default function Applications() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterUploader, setFilterUploader] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
@@ -175,13 +177,32 @@ export default function Applications() {
     onResumeOpen();
   };
 
+  // Extract unique uploaders from applications
+  const uploaders = React.useMemo(() => {
+    const uniqueUploaders = new Map();
+    applications.forEach(app => {
+      if (app.uploaded_by && app.uploaded_by_name) {
+        if (!uniqueUploaders.has(app.uploaded_by)) {
+          uniqueUploaders.set(app.uploaded_by, {
+            id: app.uploaded_by,
+            name: app.uploaded_by_name,
+            email: app.uploaded_by_email,
+            profile_image: app.uploaded_by_profile_image
+          });
+        }
+      }
+    });
+    return Array.from(uniqueUploaders.values());
+  }, [applications]);
+
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
       (app.candidate_name_extracted?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (app.candidate_email?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (app.job_title?.toLowerCase().includes(searchQuery.toLowerCase()) || false);
     const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesUploader = filterUploader === 'all' || app.uploaded_by === filterUploader;
+    return matchesSearch && matchesStatus && matchesUploader;
   });
 
   // Export applications to CSV
@@ -293,6 +314,53 @@ export default function Applications() {
                 <SelectItem key="Selected">Selected</SelectItem>
                 <SelectItem key="Rejected">Rejected</SelectItem>
               </Select>
+              {uploaders.length > 0 && (
+                <Select
+                  className="w-44"
+                  size="sm"
+                  variant="flat"
+                  selectedKeys={[filterUploader]}
+                  onSelectionChange={(keys) => setFilterUploader(Array.from(keys)[0])}
+                  aria-label="Filter by uploader"
+                  startContent={<UserIcon size={14} className="text-default-400" />}
+                  classNames={{
+                    trigger: "bg-default-100 dark:bg-default-100"
+                  }}
+                  renderValue={(items) => {
+                    return items.map((item) => {
+                      if (item.key === 'all') return "All Uploaders";
+                      const uploader = uploaders.find(u => u.id === item.key);
+                      if (!uploader) return item.textValue;
+                      return (
+                        <div key={item.key} className="flex items-center gap-2">
+                          <Avatar 
+                            src={uploader.profile_image || undefined} 
+                            name={getInitials(uploader.name)} 
+                            showFallback={true}
+                            className="w-4 h-4 text-[8px]" 
+                          />
+                          <span className="truncate">{uploader.name}</span>
+                        </div>
+                      );
+                    });
+                  }}
+                >
+                  <SelectItem key="all">All Uploaders</SelectItem>
+                  {uploaders.map((uploader) => (
+                    <SelectItem key={uploader.id} textValue={uploader.name}>
+                      <div className="flex items-center gap-2">
+                        <Avatar 
+                          src={uploader.profile_image || undefined} 
+                          name={getInitials(uploader.name)} 
+                          showFallback={true}
+                          className="w-6 h-6 text-[10px]" 
+                        />
+                        <span className="truncate">{uploader.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </Select>
+              )}
             </div>
             
             <div className="flex items-center gap-4 pr-2">
@@ -552,7 +620,7 @@ export default function Applications() {
                                   <div className="flex flex-col gap-6">
                                     <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm">
                                       <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <User size={14} className="text-primary" />
+                                        <UserIcon size={14} className="text-primary" />
                                         Contact Information
                                       </h4>
                                       <div className="space-y-4">

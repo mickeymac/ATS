@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api, { getTeamLeads, getRecruiters, toggleJobActive, assignTeamLeadToJob, assignRecruitersToJob } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { AppShell } from '../components/AppShell';
+import { ResumeViewer } from '../components/applications/ResumeViewer';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CardSkeleton } from '../components/SkeletonLoaders';
@@ -37,7 +38,9 @@ import {
   CheckboxGroup,
   Checkbox,
   Avatar,
-  Skeleton
+  Skeleton,
+  Spinner,
+  Progress
 } from '@nextui-org/react';
 import { 
   Briefcase, 
@@ -56,7 +59,22 @@ import {
   ShieldAlert,
   Check,
   Clock,
-  List
+  List,
+  Star,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Phone,
+  MessageSquare,
+  Target,
+  CheckCircle,
+  GraduationCap,
+  Linkedin,
+  Github,
+  AlertCircle,
+  Eye,
+  Maximize2,
+  FileText
 } from 'lucide-react';
 
 export default function Jobs() {
@@ -77,6 +95,14 @@ export default function Jobs() {
   const [selectedTab, setSelectedTab] = useState('list');
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedRecruiters, setSelectedRecruiters] = useState([]);
+  
+  const { isOpen: isApplicantsOpen, onOpen: onApplicantsOpen, onClose: onApplicantsClose } = useDisclosure();
+  const [selectedJobForApplicants, setSelectedJobForApplicants] = useState(null);
+  const [jobApplicants, setJobApplicants] = useState([]);
+  const [loadingApplicants, setLoadingApplicants] = useState(false);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [selectedAppForResume, setSelectedAppForResume] = useState(null);
+  const { isOpen: isResumeOpen, onOpen: onResumeOpen, onClose: onResumeClose } = useDisclosure();
   
   const [newJob, setNewJob] = useState({
     title: '',
@@ -124,6 +150,20 @@ export default function Jobs() {
       fetchBoardData();
     }
   }, [fetchJobs, fetchBoardData, user?.role]);
+
+    const handleViewResume = (app) => {
+    setSelectedAppForResume(app);
+    onResumeOpen();
+  };
+
+  const toggleRowExpansion = (id) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleCreateJob = async () => {
     try {
@@ -216,6 +256,20 @@ export default function Jobs() {
     }
   };
 
+  const handleJobClick = async (job) => {
+    setSelectedJobForApplicants(job);
+    onApplicantsOpen();
+    setLoadingApplicants(true);
+    try {
+      const response = await api.get(`/applications/job/${job._id}`);
+      setJobApplicants(response.data.items || []);
+    } catch (error) {
+      addToast('Failed to fetch applicants for this job.', 'error');
+    } finally {
+      setLoadingApplicants(false);
+    }
+  };
+
   const getUserById = (userId) => {
     return usersData.find(u => u._id === userId);
   };
@@ -295,7 +349,6 @@ export default function Jobs() {
 
   // Board Job Card Component
   const BoardJobCard = ({ job }) => {
-    const creator = getUserById(job.created_by);
     const assignedTeamLead = teamLeads.find(tl => tl.id === job.assigned_team_lead_id);
     const assignedRecruiterCount = job.assigned_recruiter_ids?.length || 0;
     const isActive = job.is_active !== false;
@@ -305,7 +358,11 @@ export default function Jobs() {
       : 'Status never changed';
 
     return (
-      <Card className={`group border border-divider hover:border-primary/50 hover:shadow-md transition-all duration-300 ${!isActive ? 'opacity-70 bg-default-50' : ''}`}>
+      <Card 
+        isPressable
+        onPress={() => handleJobClick(job)}
+        className={`group border border-divider hover:border-primary/50 hover:shadow-md transition-all duration-300 ${!isActive ? 'opacity-70 bg-default-50' : ''}`}
+      >
         <CardBody className="p-4 flex flex-col gap-4">
           <div className="flex justify-between items-start">
             <div className="flex flex-col gap-1">
@@ -317,7 +374,7 @@ export default function Jobs() {
             </div>
             {hasPermission('can_activate_jobs') && (
               <Tooltip content={statusTooltip}>
-                <div className="flex items-center">
+                <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
                   <Switch 
                     size="sm" 
                     isSelected={isActive}
@@ -346,7 +403,8 @@ export default function Jobs() {
                 <span>Team Lead</span>
               </div>
               {hasPermission('can_assign_jobs') ? (
-                <Select
+                <div onClick={(e) => e.stopPropagation()} className="w-full">
+                  <Select
                   placeholder="Select Lead"
                   size="sm"
                   variant="flat"
@@ -365,7 +423,8 @@ export default function Jobs() {
                       </div>
                     </SelectItem>
                   ))}
-                </Select>
+                  </Select>
+                </div>
               ) : (
                 <div className="flex items-center gap-2 p-1.5 rounded-lg bg-default-50 border border-default-100">
                   <Avatar name={assignedTeamLead?.name?.charAt(0) || '?'} size="tiny" className="w-5 h-5 text-[10px]" />
@@ -387,23 +446,32 @@ export default function Jobs() {
                 </div>
               </div>
               {(hasPermission('can_assign_jobs') || hasPermission('can_self_assign_recruiters')) && (
-                <Button 
-                  size="sm" 
-                  variant="flat"
-                  onPress={() => openRecruiterModal(job)}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Button 
+                    size="sm" 
+                    variant="flat"
+                    onPress={() => openRecruiterModal(job)}
                   className="h-7 text-[10px] font-bold px-3 bg-default-100 hover:bg-primary hover:text-white transition-all"
                 >
-                  Manage
-                </Button>
+                    Manage
+                  </Button>
+                </div>
               )}
             </div>
           </div>
           
-          {/* Creator info */}
-          <div className="mt-1 pt-3 border-t border-divider">
+          {/* Footer info: Applicants & Creator */}
+          <div className="mt-1 pt-3 border-t border-divider flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Users size={10} className="text-default-400" />
+                <span className="text-[10px] font-bold text-default-600">{job.applicants_count || 0}</span>
+                <span className="text-[9px] font-medium text-default-400 uppercase tracking-tighter">Applicants</span>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5 text-[9px] font-medium text-default-400 italic">
               <Clock size={10} />
-              <span>Created {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'} by {job.created_by_name || creator?.name || 'Admin'}</span>
+              <span>{job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}</span>
             </div>
           </div>
         </CardBody>
@@ -419,7 +487,296 @@ export default function Jobs() {
           <h1 className="text-2xl font-bold text-default-900">Job Postings</h1>
         </div>
         <CardSkeleton count={6} />
-      </AppShell>
+  
+      {/* Job Applicants Modal */}
+      <Modal 
+        isOpen={isApplicantsOpen} 
+        onClose={onApplicantsClose}
+        size="5xl"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1 pb-4 border-b border-divider">
+                <h3 className="text-xl font-bold text-default-900">
+                  Applicants for <span className="text-primary">{selectedJobForApplicants?.title}</span>
+                </h3>
+                <p className="text-sm text-default-500 font-medium mt-1 flex items-center gap-2">
+                  <Users size={14} />
+                  {jobApplicants.length} candidate(s) applied for this position
+                </p>
+              </ModalHeader>
+              <ModalBody className="py-6 bg-default-50/50 dark:bg-default-100/10">
+                {loadingApplicants ? (
+                  <div className="flex flex-col justify-center items-center h-48 gap-4">
+                    <Spinner size="lg" color="primary" />
+                    <p className="text-default-500 font-medium text-sm animate-pulse">Fetching candidate data...</p>
+                  </div>
+                ) : jobApplicants.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-default-400 gap-4">
+                    <div className="p-4 rounded-full bg-default-100">
+                      <Users size={40} className="opacity-50" />
+                    </div>
+                    <p className="font-medium text-lg text-default-600">No candidates have applied yet.</p>
+                  </div>
+                ) : (
+                  <Card className="border border-divider shadow-sm overflow-hidden bg-content1 dark:bg-default-50/20">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-full">
+                        <thead>
+                          <tr className="bg-default-50 dark:bg-default-100/50 border-b border-divider">
+                            <th className="px-6 py-4 w-12"></th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Candidate</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[140px]">Match Score</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[160px]">Status</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Applied On</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-divider/50">
+                          {jobApplicants.map(app => {
+                            const statusColors = {
+                              applied: "default",
+                              shortlisted: "secondary",
+                              interview_scheduled: "warning",
+                              approved: "success",
+                              rejected: "danger",
+                              hired: "success"
+                            };
+                            const statusColor = statusColors[app.status] || "default";
+                            const score = app.final_score || app.match_score || 0;
+                            const scoreColor = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
+                            
+                            const isExpanded = expandedRows.has(app._id);
+                            return (
+                              <React.Fragment key={app._id}>
+                                <tr 
+                                  className={`group hover:bg-default-50 dark:hover:bg-default-100/50 transition-all duration-200 cursor-pointer ${isExpanded ? 'bg-default-50/80 dark:bg-default-100/30' : ''}`}
+                                  onClick={() => toggleRowExpansion(app._id)}
+                                >
+                                  <td className="px-6 py-5">
+                                    <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-primary text-white shadow-sm' : 'bg-default-100 dark:bg-default-100 text-default-400 group-hover:bg-default-200'}`}>
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex items-center gap-3">
+                                      <Avatar 
+                                        name={app.candidate_name_extracted?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?'} 
+                                        showFallback={true}
+                                        size="sm"
+                                        isBordered
+                                        className="w-8 h-8 text-xs font-bold"
+                                      />
+                                      <div>
+                                        <p className="text-sm font-bold text-default-900 group-hover:text-primary transition-colors leading-tight">
+                                          {app.candidate_name_extracted || 'Unknown'}
+                                        </p>
+                                        <p className="text-[11px] text-default-500 dark:text-default-400 mt-0.5 font-medium">
+                                          {app.candidate_email}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex flex-col gap-1.5 w-24">
+                                      <div className="flex items-center justify-between">
+                                        <span className={`text-xs font-bold text-${scoreColor}`}>
+                                          {score.toFixed(0)}%
+                                        </span>
+                                        <Star size={12} className={`text-${scoreColor} fill-${scoreColor}`} />
+                                      </div>
+                                      <Progress 
+                                        size="sm" 
+                                        value={score} 
+                                        color={scoreColor}
+                                        className="h-1.5"
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5 min-w-[160px]">
+                                    <Chip 
+                                      size="sm" 
+                                      variant="flat" 
+                                      color={statusColor}
+                                      className="font-bold uppercase text-[10px]"
+                                    >
+                                      {app.status ? app.status.replace('_', ' ') : 'Pending'}
+                                    </Chip>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-semibold text-default-700">
+                                        {app.applied_at ? new Date(app.applied_at).toLocaleDateString() : 'N/A'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                                
+                                {isExpanded && (
+                                  <tr className="bg-default-50/30 dark:bg-default-100/10">
+                                    <td colSpan={5} className="px-8 py-6">
+                                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        {/* Left Column: Contact */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <Users size={14} className="text-primary" />
+                                            Contact Details
+                                          </h4>
+                                          <div className="space-y-4">
+                                            <div className="flex items-center gap-3">
+                                              <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-50 text-primary flex-shrink-0">
+                                                <Mail size={16} />
+                                              </div>
+                                              <div className="flex flex-col overflow-hidden">
+                                                <span className="text-[10px] font-bold text-default-400 uppercase">Email</span>
+                                                <span className="text-sm font-medium text-default-800 dark:text-default-700 truncate break-all">{app.candidate_email || 'N/A'}</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <div className="p-2 rounded-lg bg-secondary-50 dark:bg-secondary-50 text-secondary flex-shrink-0">
+                                                <Phone size={16} />
+                                              </div>
+                                              <div className="flex flex-col overflow-hidden">
+                                                <span className="text-[10px] font-bold text-default-400 uppercase">Phone</span>
+                                                <span className="text-sm font-medium text-default-800 dark:text-default-700">{app.candidate_phone || 'N/A'}</span>
+                                              </div>
+                                            </div>
+                                            
+                                            <Button 
+                                              fullWidth 
+                                              color="primary" 
+                                              variant="flat" 
+                                              startContent={<Eye size={16} />}
+                                              className="font-bold mt-4"
+                                              onPress={() => handleViewResume(app)}
+                                            >
+                                              View Resume
+                                            </Button>
+                                          </div>
+                                        </div>
+
+                                        {/* Middle Column: Scores */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                            <Target size={16} className="text-primary" />
+                                            ATS Match Breakdown
+                                          </h4>
+                                          {app.score_display ? (
+                                            <div className="space-y-6">
+                                              <div className="space-y-2">
+                                                <div className="flex justify-between items-end">
+                                                  <span className="text-xs font-bold text-default-600">Skills Alignment</span>
+                                                  <span className="text-sm font-extrabold text-default-900">{app.score_display.skill}</span>
+                                                </div>
+                                                <Progress size="sm" value={parseFloat(app.score_display.skill.split('/')[0]) * 2} color="primary" className="h-1.5" />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <div className="flex justify-between items-end">
+                                                  <span className="text-xs font-bold text-default-600">Experience Match</span>
+                                                  <span className="text-sm font-extrabold text-default-900">{app.score_display.experience}</span>
+                                                </div>
+                                                <Progress size="sm" value={parseFloat(app.score_display.experience.split('/')[0]) * 2.85} color="secondary" className="h-1.5" />
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col items-center justify-center py-10 text-default-400 italic gap-2">
+                                              <AlertCircle size={32} className="opacity-20" />
+                                              <p className="text-xs">Detailed scores unavailable</p>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Right Column: Skills */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm flex flex-col gap-4">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest flex items-center gap-2">
+                                            <CheckCircle size={16} className="text-success" />
+                                            Skills Analysis
+                                          </h4>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {(app.matched_skills || []).map((skill, idx) => (
+                                              <Chip key={idx} size="sm" variant="dot" color="success" className="bg-success-50 dark:bg-success-50 h-6">{skill}</Chip>
+                                            ))}
+                                            {(app.matched_skills || []).length === 0 && (
+                                              <span className="text-xs text-default-400 italic">No matched skills extracted</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </ModalBody>
+              <ModalFooter className="border-t border-divider py-4">
+                <Button color="primary" variant="flat" onPress={onClose} className="font-bold">
+                  Close Window
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+      {/* Resume Viewer Modal */}
+      <Modal 
+        isOpen={isResumeOpen} 
+        onClose={onResumeClose} 
+        size="5xl" 
+        scrollBehavior="inside"
+        classNames={{
+          base: "max-h-[90vh]",
+          header: "border-b border-divider",
+          footer: "border-t border-divider"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="text-primary" size={20} />
+                  <h3 className="text-xl font-bold">Resume Viewer</h3>
+                </div>
+                <p className="text-sm font-medium text-default-500">
+                  {selectedAppForResume?.candidate_name_extracted} • {selectedAppForResume?.job_title}
+                </p>
+              </ModalHeader>
+              <ModalBody className="p-0 bg-default-50/50">
+                <div className="h-[70vh] w-full">
+                  {selectedAppForResume ? (
+                    <ResumeViewer application={selectedAppForResume} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <Spinner label="Loading resume..." />
+                    </div>
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="danger" variant="light" onPress={onClose} className="font-bold">
+                  Close
+                </Button>
+                <Button 
+                  color="primary" 
+                  startContent={<Maximize2 size={16} />}
+                  className="font-bold"
+                  onPress={() => window.open(selectedAppForResume?.resume_url, '_blank')}
+                >
+                  Open in New Tab
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+    </AppShell>
     );
   }
 
@@ -547,7 +904,12 @@ export default function Jobs() {
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredJobs.map((job) => (
-                    <Card key={job._id} className="group border border-divider hover:border-primary/50 hover:shadow-xl transition-all duration-500 overflow-hidden bg-content1 dark:bg-default-50/20 backdrop-blur-sm">
+                    <Card 
+                    key={job._id} 
+                    isPressable
+                    onPress={() => handleJobClick(job)}
+                    className="group border border-divider hover:border-primary/50 hover:shadow-xl transition-all duration-500 overflow-hidden bg-content1 dark:bg-default-50/20 backdrop-blur-sm"
+                  >
                       <CardHeader className="flex justify-between items-start p-6 pb-2">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-2">
@@ -562,8 +924,9 @@ export default function Jobs() {
                           </div>
                         </div>
                         {isHR && (
-                          <Dropdown placement="bottom-end">
-                            <DropdownTrigger>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Dropdown placement="bottom-end">
+                              <DropdownTrigger>
                               <Button isIconOnly size="sm" variant="flat" className="bg-default-100 dark:bg-default-100/50 hover:bg-default-200">
                                 <MoreVertical size={16} />
                               </Button>
@@ -587,8 +950,9 @@ export default function Jobs() {
                                   Delete Job
                                 </DropdownItem>
                               )}
-                            </DropdownMenu>
-                          </Dropdown>
+                              </DropdownMenu>
+                            </Dropdown>
+                          </div>
                         )}
                       </CardHeader>
                       <CardBody className="px-6 py-4">
@@ -752,7 +1116,12 @@ export default function Jobs() {
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredJobs.map((job) => (
-                  <Card key={job._id} className="group border border-divider hover:border-primary/50 hover:shadow-xl transition-all duration-500 overflow-hidden bg-default-50/20 backdrop-blur-sm">
+                  <Card 
+                    key={job._id} 
+                    isPressable
+                    onPress={() => handleJobClick(job)}
+                    className="group border border-divider hover:border-primary/50 hover:shadow-xl transition-all duration-500 overflow-hidden bg-default-50/20 backdrop-blur-sm"
+                  >
                     <CardHeader className="flex justify-between items-start p-6 pb-2">
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
@@ -1006,6 +1375,295 @@ export default function Jobs() {
                 <Button color="primary" onPress={handleAssignRecruiters}>
                   <Check size={16} />
                   Save
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Job Applicants Modal */}
+      <Modal 
+        isOpen={isApplicantsOpen} 
+        onClose={onApplicantsClose}
+        size="5xl"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1 pb-4 border-b border-divider">
+                <h3 className="text-xl font-bold text-default-900">
+                  Applicants for <span className="text-primary">{selectedJobForApplicants?.title}</span>
+                </h3>
+                <p className="text-sm text-default-500 font-medium mt-1 flex items-center gap-2">
+                  <Users size={14} />
+                  {jobApplicants.length} candidate(s) applied for this position
+                </p>
+              </ModalHeader>
+              <ModalBody className="py-6 bg-default-50/50 dark:bg-default-100/10">
+                {loadingApplicants ? (
+                  <div className="flex flex-col justify-center items-center h-48 gap-4">
+                    <Spinner size="lg" color="primary" />
+                    <p className="text-default-500 font-medium text-sm animate-pulse">Fetching candidate data...</p>
+                  </div>
+                ) : jobApplicants.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-default-400 gap-4">
+                    <div className="p-4 rounded-full bg-default-100">
+                      <Users size={40} className="opacity-50" />
+                    </div>
+                    <p className="font-medium text-lg text-default-600">No candidates have applied yet.</p>
+                  </div>
+                ) : (
+                  <Card className="border border-divider shadow-sm overflow-hidden bg-content1 dark:bg-default-50/20">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-full">
+                        <thead>
+                          <tr className="bg-default-50 dark:bg-default-100/50 border-b border-divider">
+                            <th className="px-6 py-4 w-12"></th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Candidate</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[140px]">Match Score</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500 min-w-[160px]">Status</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-default-500">Applied On</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-divider/50">
+                          {jobApplicants.map(app => {
+                            const statusColors = {
+                              applied: "default",
+                              shortlisted: "secondary",
+                              interview_scheduled: "warning",
+                              approved: "success",
+                              rejected: "danger",
+                              hired: "success"
+                            };
+                            const statusColor = statusColors[app.status] || "default";
+                            const score = app.final_score || app.match_score || 0;
+                            const scoreColor = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger';
+                            
+                            const isExpanded = expandedRows.has(app._id);
+                            return (
+                              <React.Fragment key={app._id}>
+                                <tr 
+                                  className={`group hover:bg-default-50 dark:hover:bg-default-100/50 transition-all duration-200 cursor-pointer ${isExpanded ? 'bg-default-50/80 dark:bg-default-100/30' : ''}`}
+                                  onClick={() => toggleRowExpansion(app._id)}
+                                >
+                                  <td className="px-6 py-5">
+                                    <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-primary text-white shadow-sm' : 'bg-default-100 dark:bg-default-100 text-default-400 group-hover:bg-default-200'}`}>
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex items-center gap-3">
+                                      <Avatar 
+                                        name={app.candidate_name_extracted?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?'} 
+                                        showFallback={true}
+                                        size="sm"
+                                        isBordered
+                                        className="w-8 h-8 text-xs font-bold"
+                                      />
+                                      <div>
+                                        <p className="text-sm font-bold text-default-900 group-hover:text-primary transition-colors leading-tight">
+                                          {app.candidate_name_extracted || 'Unknown'}
+                                        </p>
+                                        <p className="text-[11px] text-default-500 dark:text-default-400 mt-0.5 font-medium">
+                                          {app.candidate_email}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex flex-col gap-1.5 w-24">
+                                      <div className="flex items-center justify-between">
+                                        <span className={`text-xs font-bold text-${scoreColor}`}>
+                                          {score.toFixed(0)}%
+                                        </span>
+                                        <Star size={12} className={`text-${scoreColor} fill-${scoreColor}`} />
+                                      </div>
+                                      <Progress 
+                                        size="sm" 
+                                        value={score} 
+                                        color={scoreColor}
+                                        className="h-1.5"
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5 min-w-[160px]">
+                                    <Chip 
+                                      size="sm" 
+                                      variant="flat" 
+                                      color={statusColor}
+                                      className="font-bold uppercase text-[10px]"
+                                    >
+                                      {app.status ? app.status.replace('_', ' ') : 'Pending'}
+                                    </Chip>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-semibold text-default-700">
+                                        {app.applied_at ? new Date(app.applied_at).toLocaleDateString() : 'N/A'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                                
+                                {isExpanded && (
+                                  <tr className="bg-default-50/30 dark:bg-default-100/10">
+                                    <td colSpan={5} className="px-8 py-6">
+                                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        {/* Left Column: Contact */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <Users size={14} className="text-primary" />
+                                            Contact Details
+                                          </h4>
+                                          <div className="space-y-4">
+                                            <div className="flex items-center gap-3">
+                                              <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-50 text-primary flex-shrink-0">
+                                                <Mail size={16} />
+                                              </div>
+                                              <div className="flex flex-col overflow-hidden">
+                                                <span className="text-[10px] font-bold text-default-400 uppercase">Email</span>
+                                                <span className="text-sm font-medium text-default-800 dark:text-default-700 truncate break-all">{app.candidate_email || 'N/A'}</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <div className="p-2 rounded-lg bg-secondary-50 dark:bg-secondary-50 text-secondary flex-shrink-0">
+                                                <Phone size={16} />
+                                              </div>
+                                              <div className="flex flex-col overflow-hidden">
+                                                <span className="text-[10px] font-bold text-default-400 uppercase">Phone</span>
+                                                <span className="text-sm font-medium text-default-800 dark:text-default-700">{app.candidate_phone || 'N/A'}</span>
+                                              </div>
+                                            </div>
+                                            
+                                            <Button 
+                                              fullWidth 
+                                              color="primary" 
+                                              variant="flat" 
+                                              startContent={<Eye size={16} />}
+                                              className="font-bold mt-4"
+                                              onPress={() => handleViewResume(app)}
+                                            >
+                                              View Resume
+                                            </Button>
+                                          </div>
+                                        </div>
+
+                                        {/* Middle Column: Scores */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                            <Target size={16} className="text-primary" />
+                                            ATS Match Breakdown
+                                          </h4>
+                                          {app.score_display ? (
+                                            <div className="space-y-6">
+                                              <div className="space-y-2">
+                                                <div className="flex justify-between items-end">
+                                                  <span className="text-xs font-bold text-default-600">Skills Alignment</span>
+                                                  <span className="text-sm font-extrabold text-default-900">{app.score_display.skill}</span>
+                                                </div>
+                                                <Progress size="sm" value={parseFloat(app.score_display.skill.split('/')[0]) * 2} color="primary" className="h-1.5" />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <div className="flex justify-between items-end">
+                                                  <span className="text-xs font-bold text-default-600">Experience Match</span>
+                                                  <span className="text-sm font-extrabold text-default-900">{app.score_display.experience}</span>
+                                                </div>
+                                                <Progress size="sm" value={parseFloat(app.score_display.experience.split('/')[0]) * 2.85} color="secondary" className="h-1.5" />
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col items-center justify-center py-10 text-default-400 italic gap-2">
+                                              <AlertCircle size={32} className="opacity-20" />
+                                              <p className="text-xs">Detailed scores unavailable</p>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Right Column: Skills */}
+                                        <div className="p-5 rounded-2xl bg-white dark:bg-default-50 border border-divider shadow-sm flex flex-col gap-4">
+                                          <h4 className="text-xs font-extrabold text-default-400 uppercase tracking-widest flex items-center gap-2">
+                                            <CheckCircle size={16} className="text-success" />
+                                            Skills Analysis
+                                          </h4>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {(app.matched_skills || []).map((skill, idx) => (
+                                              <Chip key={idx} size="sm" variant="dot" color="success" className="bg-success-50 dark:bg-success-50 h-6">{skill}</Chip>
+                                            ))}
+                                            {(app.matched_skills || []).length === 0 && (
+                                              <span className="text-xs text-default-400 italic">No matched skills extracted</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </ModalBody>
+              <ModalFooter className="border-t border-divider py-4">
+                <Button color="primary" variant="flat" onPress={onClose} className="font-bold">
+                  Close Window
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+      {/* Resume Viewer Modal */}
+      <Modal 
+        isOpen={isResumeOpen} 
+        onClose={onResumeClose} 
+        size="5xl" 
+        scrollBehavior="inside"
+        classNames={{
+          base: "max-h-[90vh]",
+          header: "border-b border-divider",
+          footer: "border-t border-divider"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="text-primary" size={20} />
+                  <h3 className="text-xl font-bold">Resume Viewer</h3>
+                </div>
+                <p className="text-sm font-medium text-default-500">
+                  {selectedAppForResume?.candidate_name_extracted} • {selectedAppForResume?.job_title}
+                </p>
+              </ModalHeader>
+              <ModalBody className="p-0 bg-default-50/50">
+                <div className="h-[70vh] w-full">
+                  {selectedAppForResume ? (
+                    <ResumeViewer application={selectedAppForResume} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <Spinner label="Loading resume..." />
+                    </div>
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="danger" variant="light" onPress={onClose} className="font-bold">
+                  Close
+                </Button>
+                <Button 
+                  color="primary" 
+                  startContent={<Maximize2 size={16} />}
+                  className="font-bold"
+                  onPress={() => window.open(selectedAppForResume?.resume_url, '_blank')}
+                >
+                  Open in New Tab
                 </Button>
               </ModalFooter>
             </>

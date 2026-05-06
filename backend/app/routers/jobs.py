@@ -138,6 +138,9 @@ async def read_jobs(
     jobs = []
     async for job in cursor:
         job["_id"] = str(job["_id"])
+        # Count applicants for this job
+        count = await db.applications.count_documents({"job_id": job["_id"]})
+        job["applicants_count"] = count
         jobs.append(JobInDB(**job))
     
     return {
@@ -153,6 +156,9 @@ async def read_job(job_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     job["_id"] = str(job["_id"])
+    # Count applicants for this job
+    count = await db.applications.count_documents({"job_id": job["_id"]})
+    job["applicants_count"] = count
     return JobInDB(**job)
 
 @router.put("/{job_id}", response_model=JobInDB)

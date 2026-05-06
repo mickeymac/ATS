@@ -140,10 +140,6 @@ const AdminDashboard = () => {
   };
 
   const handleUploadResume = async () => {
-    if (!selectedJobId) {
-      addToast("Please select a job.", "error");
-      return;
-    }
     if (!selectedFile) {
       addToast("Please select a resume file.", "error");
       return;
@@ -152,7 +148,9 @@ const AdminDashboard = () => {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('job_id', selectedJobId);
+      if (selectedJobId && selectedJobId !== 'global') {
+        formData.append('job_id', selectedJobId);
+      }
       formData.append('file', selectedFile);
 
       await api.post('/applications/upload', formData, {
@@ -392,10 +390,13 @@ const AdminDashboard = () => {
               <ModalBody>
                 <Select
                   label="Job Position"
-                  placeholder="Select a job position"
-                  selectedKeys={selectedJobId ? [selectedJobId] : []}
+                  placeholder="Select a job position (or leave for Global Database)"
+                  selectedKeys={selectedJobId ? [selectedJobId] : ['global']}
                   onSelectionChange={(keys) => setSelectedJobId(Array.from(keys)[0])}
                 >
+                  <SelectItem key="global" value="global">
+                    None (Global Resume Database)
+                  </SelectItem>
                   {jobs.map((job) => (
                     <SelectItem key={job._id} value={job._id}>
                       {job.title}

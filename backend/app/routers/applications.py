@@ -50,20 +50,30 @@ async def _enrich_application(app: dict, db: AsyncIOMotorDatabase) -> dict:
         if isinstance(app.get(list_field), list):
             app[list_field] = [x for x in app[list_field] if x is not None]
 
+    uploaded_by = app.get("uploaded_by")
+    if uploaded_by and ObjectId.is_valid(uploaded_by):
+        uploader = await db.users.find_one({"_id": ObjectId(uploaded_by)})
+        if uploader:
+            app["uploaded_by_name"] = uploader.get("name")
+            app["uploaded_by_email"] = uploader.get("email")
+            app["uploaded_by_profile_image"] = uploader.get("profile_image")
+
     return app
 
 @router.post("/upload", response_model=ApplicationInDB)
 async def upload_resume(
-    job_id: str = Form(...),
+    job_id: Optional[str] = Form(None),
     file: UploadFile = File(...),
     current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """HR/Admin uploads a resume for a job posting."""
-    # Check if job exists
-    job = await db.jobs.find_one({"_id": ObjectId(job_id)})
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+    job = None
+    if job_id:
+        # Check if job exists
+        job = await db.jobs.find_one({"_id": ObjectId(job_id)})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
 
     # Read file content ONCE
     file_content = await file.read()
@@ -127,10 +137,16 @@ async def upload_resume(
             "candidate_email": candidate_email
         })
         if existing_app:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"A resume for candidate with email '{candidate_email}' already exists for this job"
-            )
+            if job_id:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"A resume for candidate with email '{candidate_email}' already exists for this job"
+                )
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"A global resume for candidate with email '{candidate_email}' already exists"
+                )
             
     # Build safely formatted filename for Drive
     candidate_name = parsed_candidate_data.get("name")
@@ -170,31 +186,60 @@ async def upload_resume(
         raise HTTPException(status_code=500, detail=f"B2 upload failed: {str(e)}")
     
     # Production scoring v2
-    try:
-        scoring_result = await evaluate_application_v2(
-            parsed_candidate_data, 
-            extracted_text, 
-            job
-        )
-    except Exception as e:
-        import traceback
-        print(f"Scoring error: {e}")
-        traceback.print_exc()
-        scoring_result = {
-            "skill_score": 0.0,
-            "experience_score": 0.0,
-            "education_score": 0.0,
-            "final_score": 0.0,
-            "matched_skills": [],
-            "missing_skills": [],
-            "skill_coverage": 0.0,
-            "breakdown": {}
-        }
+    scoring_result = {
+        "skill_score": 0.0,
+        "experience_score": 0.0,
+        "education_score": 0.0,
+        "final_score": 0.0,
+        "matched_skills": [],
+        "missing_skills": [],
+        "skill_coverage": 0.0,
+        "breakdown": {}
+    }
+    global_job_scores = None
+
+    if job_id and job:
+        try:
+            scoring_result = await evaluate_application_v2(
+                parsed_candidate_data, 
+                extracted_text, 
+                job
+            )
+        except Exception as e:
+            import traceback
+            print(f"Scoring error: {e}")
+            traceback.print_exc()
+            
+    # Always compute global_job_scores for Resume Database (global talent pool)
+    global_job_scores = []
+    active_jobs = await db.jobs.find({"is_active": {"$ne": False}}).to_list(length=200)
+    for active_job in active_jobs:
+        try:
+            job_score = await evaluate_application_v2(
+                parsed_candidate_data,
+                extracted_text,
+                active_job
+            )
+            global_job_scores.append({
+                "job_id": str(active_job["_id"]),
+                "job_title": active_job.get("title"),
+                "final_score": job_score.get("final_score", 0.0),
+                "skill_score": job_score.get("skill_score", 0.0),
+                "experience_score": job_score.get("experience_score", 0.0),
+                "education_score": job_score.get("education_score", 0.0),
+                "matched_skills": job_score.get("matched_skills", []),
+                "status": "applied",
+                "applied_at": datetime.utcnow()
+            })
+        except Exception as e:
+            print(f"Error scoring against job {active_job.get('_id')}: {e}")
+            pass
     
     application_doc = {
         "job_id": job_id,
         "uploaded_by": current_user.id,  # HR/Admin who uploaded the resume
-        "job_title": job.get("title"),
+        "job_title": job.get("title") if job else None,
+        "global_job_scores": global_job_scores,
         "file_name": file_name,
         "resume_url": file_url,
         "profile_image_url": profile_image_url,
@@ -278,7 +323,7 @@ async def list_applications(
 ):
     """List applications with pagination, search, and filtering."""
     # Build query filter
-    query_filter = {}
+    query_filter = {"job_id": {"$ne": None}}
     
     if job_id:
         query_filter["job_id"] = job_id
@@ -420,7 +465,7 @@ async def get_my_uploads(
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
     """Get applications uploaded by the current logged-in user."""
-    cursor = db.applications.find({"uploaded_by": current_user.id})
+    cursor = db.applications.find({"uploaded_by": current_user.id, "job_id": {"$ne": None}})
     apps = []
     async for app in cursor:
         app = await _enrich_application(app, db)
@@ -447,26 +492,31 @@ async def get_my_stats(
     # Count uploads for each period
     today_count = await db.applications.count_documents({
         "uploaded_by": current_user.id,
+        "job_id": {"$ne": None},
         "applied_at": {"$gte": start_of_today}
     })
     
     week_count = await db.applications.count_documents({
         "uploaded_by": current_user.id,
+        "job_id": {"$ne": None},
         "applied_at": {"$gte": start_of_week}
     })
     
     month_count = await db.applications.count_documents({
         "uploaded_by": current_user.id,
+        "job_id": {"$ne": None},
         "applied_at": {"$gte": start_of_month}
     })
     
     year_count = await db.applications.count_documents({
         "uploaded_by": current_user.id,
+        "job_id": {"$ne": None},
         "applied_at": {"$gte": start_of_year}
     })
     
     total_count = await db.applications.count_documents({
-        "uploaded_by": current_user.id
+        "uploaded_by": current_user.id,
+        "job_id": {"$ne": None}
     })
     
     return {
@@ -589,3 +639,83 @@ async def bulk_delete_applications(
         "skipped": skipped_count,
         "errors": errors if errors else None
     }
+
+@router.get("/database")
+async def get_resume_database(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    search: Optional[str] = Query(None, description="Search by candidate name or email"),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Get all resumes for the global database with pagination and search."""
+    query_filter = {}
+    
+    if search:
+        query_filter["$or"] = [
+            {"candidate_name_extracted": {"$regex": search, "$options": "i"}},
+            {"candidate_email": {"$regex": search, "$options": "i"}}
+        ]
+    
+    total_count = await db.applications.count_documents(query_filter)
+    cursor = db.applications.find(query_filter).sort("applied_at", -1).skip(skip).limit(limit)
+    
+    apps = []
+    async for app in cursor:
+        app = await _enrich_application(app, db)
+        apps.append(ApplicationInDB(**app))
+    
+    return {
+        "items": apps,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.post("/{application_id}/assign")
+async def assign_application_to_job(
+    application_id: str,
+    payload: dict = Body(...),
+    current_user: UserInDB = Depends(check_role([UserRole.ADMIN, UserRole.TEAM_LEAD, UserRole.RECRUITER])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Assign a candidate from the global database to a specific job."""
+    if not ObjectId.is_valid(application_id):
+        raise HTTPException(status_code=400, detail="Invalid application ID")
+        
+    job_id = payload.get("job_id")
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required")
+        
+    app = await db.applications.find_one({"_id": ObjectId(application_id)})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    global_scores = app.get("global_job_scores", [])
+    selected_score_entry = next((score for score in global_scores if score.get("job_id") == job_id), None)
+    
+    if not selected_score_entry:
+        raise HTTPException(status_code=400, detail="Candidate has no global score for the selected job")
+        
+    # Update application with new primary job info
+    update_data = {
+        "job_id": job_id,
+        "job_title": selected_score_entry.get("job_title"),
+        "final_score": selected_score_entry.get("final_score", 0.0),
+        "skill_score": selected_score_entry.get("skill_score", 0.0),
+        "experience_score": selected_score_entry.get("experience_score", 0.0),
+        "education_score": selected_score_entry.get("education_score", 0.0),
+        "matched_skills": selected_score_entry.get("matched_skills", []),
+        "status": ApplicationStatus.APPLIED.value,
+        "review_status": "pending",  # Reset review status
+        "reviewed_by": None,
+        "comments": []
+    }
+    
+    await db.applications.update_one(
+        {"_id": ObjectId(application_id)},
+        {"$set": update_data}
+    )
+    
+    return {"success": True, "message": "Candidate assigned to job successfully"}
