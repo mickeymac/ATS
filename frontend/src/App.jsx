@@ -12,6 +12,7 @@ import Landing from './pages/Landing';
 import Jobs from './pages/Jobs';
 import Applications from './pages/Applications';
 import MyUploads from './pages/MyUploads';
+import ResumeDatabase from './pages/ResumeDatabase';
 import Review from './pages/Review';
 import Users from './pages/Users';
 import Analytics from './pages/Analytics';
@@ -77,6 +78,7 @@ function App() {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/jobs" element={<Jobs />} />
                     <Route path="/applications" element={<Applications />} />
+                    <Route path="/database" element={<ResumeDatabase />} />
                     <Route path="/my-uploads" element={<MyUploads />} />
                     <Route path="/review" element={<Review />} />
                     <Route path="/users" element={<Users />} />

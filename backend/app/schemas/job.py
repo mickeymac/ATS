@@ -56,6 +56,7 @@ class JobInDB(JobBase):
     status_changed_at: Optional[datetime] = None  # When status was changed
     assigned_team_lead_id: Optional[str] = None  # Team Lead assigned to this job
     assigned_recruiter_ids: List[str] = []  # Recruiters assigned to this job
+    applicants_count: int = 0 # Number of candidates who applied
 
 class JobUpdate(BaseModel):
     """Schema for updating job fields."""
@@ -110,10 +111,18 @@ class ScoringBreakdown(BaseModel):
     breakdown: Optional[Dict[str, float]] = None
 
 class ApplicationInDB(ApplicationCreate):
-    id: str = Field(alias="_id")
+    
+    # Application identifiers
+    job_id: Optional[str] = None
     job_title: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    uploaded_by_email: Optional[str] = None
+    uploaded_by_profile_image: Optional[str] = None
     
     # Score fields (0-100 scale)
+    id: str = Field(alias="_id")
+    uploaded_by_name: Optional[str] = None
+    
     skill_score: float = 0.0
     experience_score: float = 0.0
     education_score: float = 0.0
@@ -161,6 +170,9 @@ class ApplicationInDB(ApplicationCreate):
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[str] = None  # Team Lead user ID
     comments: List[Comment] = []
+    
+    # Global Scoring for Resume Database
+    global_job_scores: Optional[List[Dict[str, Any]]] = None
     
     # Other fields
     ranking_position: Optional[int] = None

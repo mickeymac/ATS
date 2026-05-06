@@ -10,6 +10,9 @@ import {
   Card,
   CardBody,
   Spinner,
+  Listbox,
+  ListboxItem,
+  User,
   Tooltip
 } from '@nextui-org/react';
 import { useAuth } from '../context/AuthContext';
@@ -24,11 +27,47 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { subscribe, isConnected } = useSocket();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState({ jobs: [], candidates: [] });
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+
+  // Global Search Logic
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchQuery.length >= 2) {
+        setIsSearching(true);
+        setShowSearchResults(true);
+        try {
+          const response = await api.get(`/search/?q=${searchQuery}`);
+          setSearchResults(response.data);
+        } catch (error) {
+          console.error('Search failed', error);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setShowSearchResults(false);
+        setSearchResults({ jobs: [], candidates: [] });
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const handleResultClick = (type, id) => {
+    setShowSearchResults(false);
+    setSearchQuery('');
+    if (type === 'job') {
+      navigate('/jobs'); // Could be improved to scroll to or open modal
+    } else {
+      navigate('/applications'); // Could be improved to show details
+    }
+  };
 
   const fetchNotificationCount = useCallback(async () => {
     if (!user) return;
@@ -151,21 +190,93 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 flex h-20 w-full items-center justify-between border-b border-divider/70 bg-content1/70 px-4 sm:px-6 lg:px-8 backdrop-blur-xl">
       <div className="relative flex w-full max-w-xl items-center">
-        <Input
-          classNames={{
-            base: "max-w-full sm:max-w-[28rem] h-11",
-            mainWrapper: "h-full",
-            input: "text-small",
-            inputWrapper: "h-full font-normal text-default-600 bg-content2/70 border border-divider/60 shadow-sm",
-          }}
-          placeholder="Search candidates, jobs, applications..."
-          size="sm"
-          startContent={<Search size={18} />}
-          type="search"
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-        />
-      </div>
+          <Input
+            classNames={{
+              base: "h-11",
+              mainWrapper: "h-full",
+              input: "text-small",
+              inputWrapper: "h-full font-normal text-default-600 bg-content2/70 border border-divider/60 shadow-sm",
+            }}
+            placeholder="Search candidates, jobs, applications..."
+            size="sm"
+            startContent={isSearching ? <Spinner size="sm" /> : <Search size={18} />}
+            type="search"
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
+          />
+
+          {showSearchResults && (searchQuery.length >= 2) && (
+            <Card className="absolute top-12 w-full z-50 shadow-xl border border-divider">
+              <CardBody className="p-2 max-h-[400px] overflow-y-auto">
+                {searchResults.jobs.length === 0 && searchResults.candidates.length === 0 && !isSearching ? (
+                  <div className="p-4 text-center text-default-500 text-sm italic">
+                    No results found for "{searchQuery}"
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {searchResults.jobs.length > 0 && (
+                      <div className="px-2 py-1">
+                        <p className="text-[10px] font-bold text-default-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Briefcase size={12} />
+                          Jobs
+                        </p>
+                        <Listbox aria-label="Job results" variant="flat">
+                          {searchResults.jobs.map(job => (
+                            <ListboxItem 
+                              key={job.id} 
+                              description={job.location}
+                              onPress={() => handleResultClick('job', job.id)}
+                            >
+                              {job.title}
+                            </ListboxItem>
+                          ))}
+                        </Listbox>
+                      </div>
+                    )}
+                    
+                    {searchResults.candidates.length > 0 && (
+                      <div className="px-2 py-1">
+                        <p className="text-[10px] font-bold text-default-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Users size={12} />
+                          Candidates
+                        </p>
+                        <Listbox aria-label="Candidate results" variant="flat">
+                          {searchResults.candidates.map(candidate => (
+                            <ListboxItem 
+                              key={candidate.id}
+                              onPress={() => handleResultClick('candidate', candidate.id)}
+                              textValue={candidate.name}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Avatar 
+                                  name={candidate.name?.charAt(0)} 
+                                  size="sm" 
+                                  className="w-6 h-6 text-[10px]"
+                                />
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">{candidate.name}</span>
+                                  <span className="text-[10px] text-default-400">{candidate.job_title}</span>
+                                </div>
+                              </div>
+                            </ListboxItem>
+                          ))}
+                        </Listbox>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
+          
+          {showSearchResults && (
+            <div 
+              className="fixed inset-0 z-40 bg-transparent" 
+              onClick={() => setShowSearchResults(false)}
+            />
+          )}
+        </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
         {/* Dark Mode Toggle */}

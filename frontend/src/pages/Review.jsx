@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useSocket } from '../context/SocketContext';
@@ -37,7 +37,9 @@ import {
   Tabs,
   Tab,
   Select,
-  SelectItem
+  SelectItem,
+  RadioGroup,
+  Radio
 } from '@nextui-org/react';
 import { 
   Users,
@@ -55,7 +57,11 @@ import {
   Filter,
   ArrowUpDown,
   Calendar,
-  User
+  User,
+  Mail,
+  Phone,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export default function Review() {
@@ -70,6 +76,9 @@ export default function Review() {
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [rejectedIds, setRejectedIds] = useState(new Set());
+  const [onHoldIds, setOnHoldIds] = useState(new Set());
+  const [expandedRows, setExpandedRows] = useState(new Set());
   const [selectedApp, setSelectedApp] = useState(null);
   const [comment, setComment] = useState('');
   const [addingComment, setAddingComment] = useState(false);
@@ -140,6 +149,8 @@ export default function Review() {
     setIsViewMode(viewOnly);
     setLoadingApplications(true);
     setSelectedIds(new Set());
+    setRejectedIds(new Set());
+    setOnHoldIds(new Set());
     try {
       console.log('Fetching batch:', batch.batch_id, batch);
       const response = await api.get(`/review/batch/${batch.batch_id}/applications`);
@@ -157,6 +168,8 @@ export default function Review() {
     setSelectedBatch(null);
     setBatchApplications([]);
     setSelectedIds(new Set());
+    setRejectedIds(new Set());
+    setOnHoldIds(new Set());
     setIsViewMode(false);
   };
   
@@ -185,25 +198,100 @@ export default function Review() {
   
   const filteredBatches = getFilteredBatches();
 
+  const handleDecisionChange = (id, decision) => {
+    if (decision === 'approve') {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setRejectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setOnHoldIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } else if (decision === 'reject') {
+      setRejectedIds(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setOnHoldIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } else if (decision === 'onhold') {
+      setOnHoldIds(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setRejectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleSelectAll = (isSelected) => {
     if (isSelected) {
       setSelectedIds(new Set(batchApplications.map(app => app._id)));
+      setRejectedIds(new Set());
+      setOnHoldIds(new Set());
     } else {
       setSelectedIds(new Set());
     }
   };
 
-  const handleSelectOne = (id, isSelected) => {
-    const newSet = new Set(selectedIds);
-    if (isSelected) {
-      newSet.add(id);
+  const handleRejectAll = (isRejected) => {
+    if (isRejected) {
+      setRejectedIds(new Set(batchApplications.map(app => app._id)));
+      setSelectedIds(new Set());
+      setOnHoldIds(new Set());
     } else {
-      newSet.delete(id);
+      setRejectedIds(new Set());
     }
-    setSelectedIds(newSet);
+  };
+
+  const handleOnHoldAll = (isOnHold) => {
+    if (isOnHold) {
+      setOnHoldIds(new Set(batchApplications.map(app => app._id)));
+      setSelectedIds(new Set());
+      setRejectedIds(new Set());
+    } else {
+      setOnHoldIds(new Set());
+    }
   };
 
   const isAllSelected = batchApplications.length > 0 && batchApplications.every(app => selectedIds.has(app._id));
+  const isAllExplicitlyRejected = batchApplications.length > 0 && batchApplications.every(app => rejectedIds.has(app._id));
+  const isAllOnHold = batchApplications.length > 0 && batchApplications.every(app => onHoldIds.has(app._id));
 
   const handleCompleteReviewClick = () => {
     // If no candidates selected, show confirmation dialog
@@ -220,7 +308,8 @@ export default function Review() {
     try {
       await api.post('/review/complete', {
         batch_id: selectedBatch.batch_id,
-        approved_ids: Array.from(selectedIds)
+        approved_ids: Array.from(selectedIds),
+        on_hold_ids: Array.from(onHoldIds)
       });
       if (selectedIds.size === 0) {
         addToast(`Review completed. No candidates were selected.`, 'info');
@@ -571,222 +660,204 @@ export default function Review() {
     <AppShell>
       <div className="flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
         {/* Page Header with Back Button */}
-        <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-4 justify-between mb-4">
           <div className="flex items-center gap-4">
             <Button 
               isIconOnly 
-              variant="flat" 
+              variant="light" 
               onPress={handleBack}
-              className="bg-default-100 hover:bg-default-200"
+              className="text-default-500 hover:text-default-900"
             >
               <ArrowLeft size={20} />
             </Button>
             <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-default-900">
-                  {isViewMode ? 'Review Details' : 'Reviewing Batch'}
-                </h1>
-                {isViewMode ? (
-                  <Chip color="success" variant="flat" size="sm" startContent={<CheckCircle size={14} />}>
-                    Completed
-                  </Chip>
-                ) : (
-                  <Chip color="primary" variant="flat" size="sm" className="animate-pulse">
-                    Review in Progress
-                  </Chip>
-                )}
-              </div>
-              <p className="text-default-500 text-sm mt-0.5">
-                From <span className="font-semibold text-default-700">{selectedBatch.recruiter_name}</span> • 
-                Submitted {new Date(selectedBatch.created_at).toLocaleDateString(undefined, { dateStyle: 'long' })}
-              </p>
+               <h1 className="text-2xl font-bold tracking-tight text-default-900">
+                 Review from {selectedBatch.recruiter_name}
+               </h1>
+               <p className="text-default-500 text-sm mt-0.5">
+                 {batchApplications.length} candidates • Submitted {new Date(selectedBatch.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: 'numeric' })}
+               </p>
             </div>
           </div>
-
-          {/* Summary Stats Card */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-primary-50/30 border-primary-100 border shadow-none">
-              <CardBody className="flex flex-row items-center gap-3 py-3">
-                <div className="p-2 rounded-lg bg-primary-100 text-primary">
-                  <Users size={20} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-primary-400 uppercase tracking-wider leading-none">Total Candidates</p>
-                  <p className="text-xl font-bold text-primary-700">{batchApplications.length}</p>
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card className="bg-success-50/30 border-success-100 border shadow-none">
-              <CardBody className="flex flex-row items-center gap-3 py-3">
-                <div className="p-2 rounded-lg bg-success-100 text-success">
-                  <CheckCircle size={20} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-success-400 uppercase tracking-wider leading-none">Approved</p>
-                  <p className="text-xl font-bold text-success-700">
-                    {isViewMode ? (selectedBatch.approved_count || 0) : selectedIds.size}
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card className="bg-danger-50/30 border-danger-100 border shadow-none">
-              <CardBody className="flex flex-row items-center gap-3 py-3">
-                <div className="p-2 rounded-lg bg-danger-100 text-danger">
-                  <XCircle size={20} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-danger-400 uppercase tracking-wider leading-none">Not Selected</p>
-                  <p className="text-xl font-bold text-danger-700">
-                    {isViewMode ? (selectedBatch.not_selected_count || 0) : (batchApplications.length - selectedIds.size)}
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card className="bg-secondary-50/30 border-secondary-100 border shadow-none">
-              <CardBody className="flex flex-row items-center gap-3 py-3">
-                <div className="p-2 rounded-lg bg-secondary-100 text-secondary">
-                  <Briefcase size={20} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-secondary-400 uppercase tracking-wider leading-none">Job Roles</p>
-                  <p className="text-xl font-bold text-secondary-700">{(selectedBatch.job_titles || []).length}</p>
-                </div>
-              </CardBody>
-            </Card>
-          </div>
-        </div>
-
-        {/* Actions Bar - Only show in edit mode */}
-        {!isViewMode && (
-          <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md py-3 border-b border-divider flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-lg font-bold">Candidates</h2>
-              <div className="h-4 w-px bg-divider mx-2" />
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  isSelected={isAllSelected}
-                  onValueChange={handleSelectAll}
-                  aria-label="Select all"
-                  color="success"
-                  className="mr-1"
-                />
-                <span className="text-sm font-medium text-default-600">Select All</span>
-              </div>
-            </div>
+          {!isViewMode && (
             <div className="flex items-center gap-3">
-              {selectedIds.size > 0 ? (
-                <Chip color="success" variant="flat" size="sm" className="font-bold">
-                  {selectedIds.size} Selected for Approval
-                </Chip>
-              ) : (
-                <span className="text-sm text-default-400 italic">No candidates selected</span>
-              )}
               <Button
                 color="primary"
                 size="md"
                 startContent={<CheckCircle size={18} />}
                 isLoading={submitting}
                 onPress={handleCompleteReviewClick}
-                className="font-bold shadow-md"
+                className="font-bold shadow-md px-6 rounded-full"
               >
                 Complete Review
               </Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Applications Content */}
+        {/* Applications Table */}
         {loadingApplications ? (
           <div className="flex h-64 items-center justify-center">
             <Spinner size="lg" label="Fetching candidate data..." />
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            {batchApplications.length === 0 ? (
-              <Card className="border-dashed border-2 border-divider bg-transparent">
-                <CardBody className="flex flex-col items-center justify-center py-16 gap-4">
-                  <div className="p-4 rounded-full bg-default-100">
-                    <FileText size={32} className="text-default-400" />
-                  </div>
-                  <p className="text-lg font-bold text-default-600">No candidates found in this batch</p>
-                </CardBody>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {batchApplications.map((app) => {
-                  const isApproved = isViewMode && (selectedBatch.approved_application_ids || []).includes(app._id);
-                  const isRejected = isViewMode && (selectedBatch.not_selected_application_ids || []).includes(app._id);
-                  const isSelected = !isViewMode && selectedIds.has(app._id);
-                  
-                  return (
-                    <Card 
-                      key={app._id} 
-                      className={`border-l-4 transition-all duration-200 ${
-                        isSelected || isApproved ? 'border-l-success border-success-100' : 
-                        isRejected ? 'border-l-danger border-danger-100' : 
-                        'border-l-transparent hover:border-l-primary/30 border-divider'
-                      } ${isSelected || isApproved ? 'bg-success-50/10' : ''}`}
-                    >
-                      <CardBody className="p-4 sm:p-6">
-                        <div className="flex flex-col lg:flex-row gap-6">
-                          {/* Selection/Status Column */}
-                          <div className="flex lg:flex-col items-center lg:justify-center gap-4">
-                            {!isViewMode ? (
-                              <Checkbox
-                                isSelected={isSelected}
-                                onValueChange={(selected) => handleSelectOne(app._id, selected)}
-                                size="lg"
-                                color="success"
-                              />
-                            ) : (
-                              <div className={`p-2 rounded-full ${isApproved ? 'bg-success-100 text-success' : 'bg-danger-100 text-danger'}`}>
-                                {isApproved ? <CheckCircle size={24} /> : <XCircle size={24} />}
-                              </div>
-                            )}
+          <Card className="border border-divider shadow-sm bg-content1 dark:bg-[#18181b] overflow-hidden rounded-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-default-50 dark:bg-[#27272a]/50 border-b border-divider">
+                    {!isViewMode ? (
+                      <>
+                        <th 
+                          className="px-4 py-4 w-20 text-center cursor-pointer group select-none"
+                          onClick={() => handleSelectAll(!isAllSelected)}
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-[10px] font-bold text-default-400 uppercase tracking-widest group-hover:hidden">Select</span>
+                            <span className="text-[10px] font-bold text-success uppercase tracking-widest hidden group-hover:block transition-all ">Select All</span>
+                            <Checkbox
+                              isSelected={isAllSelected}
+                              onValueChange={handleSelectAll}
+                              size="sm"
+                              color="success"
+                              radius="full"
+                              className="pointer-events-none"
+                            />
                           </div>
-
-                          {/* Candidate Info Column */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-4">
+                        </th>
+                        <th 
+                          className="px-4 py-4 w-20 text-center cursor-pointer group select-none"
+                          onClick={() => handleRejectAll(!isAllExplicitlyRejected)}
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-[10px] font-bold text-default-400 uppercase tracking-widest group-hover:hidden">Reject</span>
+                            <span className="text-[10px] font-bold text-danger uppercase tracking-widest hidden group-hover:block transition-all ">Reject All</span>
+                            <Checkbox
+                              isSelected={isAllExplicitlyRejected}
+                              onValueChange={handleRejectAll}
+                              size="sm"
+                              color="danger"
+                              radius="full"
+                              className="pointer-events-none"
+                            />
+                          </div>
+                        </th>
+                        <th 
+                          className="px-4 py-4 w-20 text-center cursor-pointer group select-none"
+                          onClick={() => handleOnHoldAll(!isAllOnHold)}
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-[10px] font-bold text-default-400 uppercase tracking-widest group-hover:hidden">Hold</span>
+                            <span className="text-[10px] font-bold text-warning uppercase tracking-widest hidden group-hover:block transition-all ">Hold All</span>
+                            <Checkbox
+                              isSelected={isAllOnHold}
+                              onValueChange={handleOnHoldAll}
+                              size="sm"
+                              color="warning"
+                              radius="full"
+                              className="pointer-events-none"
+                            />
+                          </div>
+                        </th>
+                      </>
+                    ) : (
+                      <th className="px-6 py-4 w-24 text-[10px] font-bold text-default-500 uppercase tracking-widest text-center">Outcome</th>
+                    )}
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest">Candidate</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest">Job</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest">Score</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest">Skills</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest">Comments</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-default-500 uppercase tracking-widest text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-divider/50">
+                  {batchApplications.length === 0 ? (
+                    <tr>
+                      <td colSpan={isViewMode ? 7 : 9} className="px-6 py-12 text-center text-default-500">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <FileText size={32} className="opacity-50" />
+                          <p>No candidates found in this batch</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    batchApplications.map((app) => {
+                      const isApproved = isViewMode && (selectedBatch.approved_application_ids || []).includes(app._id);
+                      const isRejected = isViewMode && (selectedBatch.not_selected_application_ids || []).includes(app._id);
+                      const isSelected = !isViewMode && selectedIds.has(app._id);
+                      const isExplicitlyRejected = !isViewMode && rejectedIds.has(app._id);
+                      const isOnHold = !isViewMode && onHoldIds.has(app._id);
+                      const isViewOnHold = isViewMode && app.review_status === 'on_hold';
+                      const isExpanded = expandedRows.has(app._id);
+                      
+                      return (
+                        <React.Fragment key={app._id}>
+                          <tr 
+                            className={`hover:bg-default-50 dark:hover:bg-[#27272a]/50 transition-colors cursor-pointer ${
+                              isSelected || isApproved ? 'bg-success-50/20 dark:bg-success-900/10' : 
+                              isExplicitlyRejected || isRejected ? 'bg-danger-50/20 dark:bg-danger-900/10' : isOnHold || isViewOnHold ? 'bg-warning-50/20 dark:bg-warning-900/10' : ''
+                            }`}
+                            onClick={() => toggleExpand(app._id)}
+                          >
+                            {!isViewMode ? (
+                              <>
+                                <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox 
+                                    isSelected={isSelected} 
+                                    onValueChange={() => handleDecisionChange(app._id, 'approve')}
+                                    color="success" 
+                                    size="sm"
+                                    radius="full"
+                                    aria-label="Approve"
+                                  />
+                                </td>
+                                <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox 
+                                    isSelected={isExplicitlyRejected} 
+                                    onValueChange={() => handleDecisionChange(app._id, 'reject')}
+                                    color="danger" 
+                                    size="sm"
+                                    radius="full"
+                                    aria-label="Reject"
+                                  />
+                                </td>
+                                <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox 
+                                    isSelected={isOnHold} 
+                                    onValueChange={() => handleDecisionChange(app._id, 'onhold')}
+                                    color="warning" 
+                                    size="sm"
+                                    radius="full"
+                                    aria-label="On Hold"
+                                  />
+                                </td>
+                              </>
+                            ) : (
+                              <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                <div className={`p-1.5 rounded-full inline-flex ${isApproved ? 'bg-success-100 text-success' : isViewOnHold ? 'bg-warning-100 text-warning' : 'bg-danger-100 text-danger'}`}>
+                                  {isApproved ? <CheckCircle size={16} /> : isViewOnHold ? <Clock size={16} /> : <XCircle size={16} />}
+                                </div>
+                              </td>
+                            )}
+                            <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
                                 <Avatar 
                                   name={app.candidate_name_extracted?.charAt(0) || '?'} 
-                                  className="w-12 h-12 text-large bg-default-200"
+                                  size="sm"
+                                  className="bg-default-200"
                                 />
-                                <div className="min-w-0">
-                                  <h3 className="text-lg font-bold text-default-900 truncate">
-                                    {app.candidate_name_extracted || 'Unknown Candidate'}
-                                  </h3>
-                                  <div className="flex items-center gap-2 text-sm text-default-500">
-                                    <span className="truncate">{app.candidate_email}</span>
-                                    {app.candidate_phone && (
-                                      <>
-                                        <span className="w-1 h-1 rounded-full bg-default-300" />
-                                        <span>{app.candidate_phone}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
+                                <span className="font-bold text-default-900">{app.candidate_name_extracted || 'Unknown Candidate'}</span>
                               </div>
-                              <div className="hidden sm:flex flex-col items-end gap-1">
-                                <span className="text-[10px] font-bold text-default-400 uppercase">Target Role</span>
-                                <Chip size="sm" color="secondary" variant="flat" className="bg-secondary-50">
-                                  {app.job_title || 'General Application'}
-                                </Chip>
-                              </div>
-                            </div>
-
-                            <Divider className="my-4 opacity-50" />
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              {/* Score & Progress */}
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="font-semibold text-default-600">Match Score</span>
-                                  <span className={`font-bold ${
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="font-semibold text-default-900">{app.job_title || 'General'}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col gap-1 w-24">
+                                <div className="flex items-center gap-1.5">
+                                  <Star size={12} className={app.final_score >= 80 ? 'text-success fill-success' : app.final_score >= 60 ? 'text-warning fill-warning' : 'text-danger fill-danger'} />
+                                  <span className={`text-xs font-bold ${
                                     app.final_score >= 80 ? 'text-success' : 
                                     app.final_score >= 60 ? 'text-warning' : 'text-danger'
                                   }`}>
@@ -794,101 +865,152 @@ export default function Review() {
                                   </span>
                                 </div>
                                 <Progress 
-                                  size="md" 
+                                  size="sm" 
                                   value={app.final_score || 0} 
                                   color={app.final_score >= 80 ? 'success' : app.final_score >= 60 ? 'warning' : 'danger'}
-                                  className="h-2"
+                                  className="h-1"
                                 />
                               </div>
-
-                              {/* Skills Tags */}
-                              <div className="space-y-2">
-                                <span className="text-xs font-semibold text-default-400 uppercase">Matched Skills</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {(app.matched_skills || []).slice(0, 4).map((skill, idx) => (
-                                    <Chip key={idx} size="sm" variant="dot" color="success" className="h-6">
-                                      {skill}
-                                    </Chip>
-                                  ))}
-                                  {(app.matched_skills || []).length > 4 && (
-                                    <Chip size="sm" variant="flat" className="h-6">
-                                      +{(app.matched_skills || []).length - 4}
-                                    </Chip>
-                                  )}
-                                  {(app.matched_skills || []).length === 0 && (
-                                    <span className="text-xs text-default-400 italic">No direct matches</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Comments Preview */}
-                              <div className="space-y-2">
-                                <span className="text-xs font-semibold text-default-400 uppercase">Review Feedback</span>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex -space-x-2">
-                                    {(app.comments || []).slice(0, 3).map((c, i) => (
-                                      <Avatar 
-                                        key={i} 
-                                        size="sm" 
-                                        name={c.user_name?.charAt(0)} 
-                                        className="border-2 border-background w-7 h-7"
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="text-sm text-default-600">
-                                    {(app.comments || []).length > 0 
-                                      ? `${(app.comments || []).length} comment${(app.comments || []).length > 1 ? 's' : ''}`
-                                      : 'No comments yet'}
+                            </td>
+                            <td className="px-6 py-4 max-w-[200px]">
+                              {/* Only show 2 skills max when collapsed */}
+                              <div className="flex flex-wrap gap-1">
+                                {(app.matched_skills || []).slice(0, 2).map((skill, idx) => (
+                                  <Chip key={idx} size="sm" variant="flat" color="success" className="bg-success-50 text-success-700 h-5 text-[10px] px-1 border-none">
+                                    {skill}
+                                  </Chip>
+                                ))}
+                                {(app.matched_skills || []).length > 2 && (
+                                  <span className="text-[10px] text-default-400 font-medium whitespace-nowrap">
+                                    +{app.matched_skills.length - 2} more
                                   </span>
-                                </div>
+                                )}
+                                {(app.matched_skills || []).length === 0 && (
+                                  <span className="text-xs text-default-400 italic">No matches</span>
+                                )}
                               </div>
-                            </div>
-                          </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1.5 text-default-500">
+                                <MessageSquare size={14} />
+                                <span className="text-xs font-medium">{(app.comments || []).length}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="flat" 
+                                  color="primary"
+                                  className="bg-primary/10 text-primary font-medium px-3 min-w-0"
+                                  startContent={<Eye size={14} />}
+                                  onPress={(e) => { e.stopPropagation(); handleViewResume(app); }}
+                                >
+                                  Resume
+                                </Button>
+                                <Button 
+                                  isIconOnly
+                                  size="sm" 
+                                  variant="light" 
+                                  className="text-default-500"
+                                  onPress={(e) => { e.stopPropagation(); toggleExpand(app._id); }}
+                                >
+                                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                          
+                          {/* Expanded Content */}
+                          {isExpanded && (
+                            <tr className="bg-default-50 dark:bg-[#18181b]/50 border-b border-divider">
+                              <td colSpan={isViewMode ? 7 : 9} className="px-8 py-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                  {/* Contact Info */}
+                                  <Card className="shadow-none border border-divider bg-background/50 dark:bg-default-100/50">
+                                    <CardBody className="p-5 space-y-4">
+                                      <h4 className="text-xs font-extrabold text-default-500 uppercase tracking-widest flex items-center gap-2">
+                                        <User size={14} /> Contact
+                                      </h4>
+                                      <div className="space-y-3">
+                                        <div className="flex items-center gap-3 text-sm">
+                                          <Mail size={16} className="text-default-400" />
+                                          <span className="text-default-700 font-medium">{app.candidate_email}</span>
+                                        </div>
+                                        {app.candidate_phone && (
+                                          <div className="flex items-center gap-3 text-sm">
+                                            <Phone size={16} className="text-default-400" />
+                                            <span className="text-default-700 font-medium">{app.candidate_phone}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </CardBody>
+                                  </Card>
 
-                          {/* Actions Column */}
-                          <div className="flex flex-row lg:flex-col gap-2 justify-end lg:justify-center border-t lg:border-t-0 lg:border-l border-divider pt-4 lg:pt-0 lg:pl-6">
-                            <Button 
-                              size="md" 
-                              variant="flat" 
-                              color="primary"
-                              startContent={<Eye size={18} />}
-                              onPress={() => handleViewResume(app)}
-                              className="font-bold flex-1 lg:flex-none"
-                            >
-                              Resume
-                            </Button>
-                            {!isViewMode ? (
-                              <Button 
-                                size="md" 
-                                variant="flat" 
-                                color="secondary"
-                                startContent={<MessageSquare size={18} />}
-                                onPress={() => handleOpenComment(app)}
-                                className="font-bold flex-1 lg:flex-none"
-                              >
-                                Comment
-                              </Button>
-                            ) : (app.comments || []).length > 0 && (
-                              <Button 
-                                size="md" 
-                                variant="flat" 
-                                color="secondary"
-                                startContent={<MessageSquare size={18} />}
-                                onPress={() => handleOpenComment(app)}
-                                className="font-bold flex-1 lg:flex-none"
-                              >
-                                View Notes
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                                  {/* All Skills */}
+                                  <Card className="shadow-none border border-divider bg-background/50 dark:bg-default-100/50">
+                                    <CardBody className="p-5 space-y-4">
+                                      <h4 className="text-xs font-extrabold text-default-500 uppercase tracking-widest">All Matched Skills</h4>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {(app.matched_skills || []).map((skill, idx) => (
+                                          <Chip key={idx} size="sm" variant="flat" color="success" className="bg-success-50 text-success-700">
+                                            {skill}
+                                          </Chip>
+                                        ))}
+                                        {(app.matched_skills || []).length === 0 && (
+                                          <span className="text-sm text-default-400 italic">No skills extracted</span>
+                                        )}
+                                      </div>
+                                    </CardBody>
+                                  </Card>
+
+                                  {/* Actions/Comments */}
+                                  <Card className="shadow-none border border-divider bg-background/50 dark:bg-default-100/50">
+                                    <CardBody className="p-5 space-y-4">
+                                      <h4 className="text-xs font-extrabold text-default-500 uppercase tracking-widest">Feedback</h4>
+                                      <div className="flex flex-col gap-4">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex -space-x-2">
+                                            {(app.comments || []).slice(0, 3).map((c, i) => (
+                                              <Avatar 
+                                                key={i} 
+                                                size="sm" 
+                                                name={c.user_name?.charAt(0)} 
+                                                className="border-2 border-background w-7 h-7 text-[10px]"
+                                              />
+                                            ))}
+                                          </div>
+                                          <span className="text-sm font-medium text-default-600">
+                                            {(app.comments || []).length > 0 
+                                              ? `${(app.comments || []).length} comment${(app.comments || []).length > 1 ? 's' : ''}`
+                                              : 'No comments yet'}
+                                          </span>
+                                        </div>
+                                        <Button 
+                                          size="sm" 
+                                          variant="flat" 
+                                          color="secondary"
+                                          startContent={<MessageSquare size={14} />}
+                                          onPress={() => handleOpenComment(app)}
+                                          className="w-full font-semibold"
+                                        >
+                                          {!isViewMode ? 'Add Comment' : 'View Notes'}
+                                        </Button>
+                                      </div>
+                                    </CardBody>
+                                  </Card>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </div>
 

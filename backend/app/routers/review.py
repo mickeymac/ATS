@@ -278,16 +278,17 @@ async def get_batch_applications(
 async def complete_review(
     batch_id: str = Body(...),
     approved_ids: List[str] = Body(...),
+    on_hold_ids: List[str] = Body([]),
     current_user: UserInDB = Depends(check_role([UserRole.TEAM_LEAD, UserRole.ADMIN])),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    """Team Lead completes review: marks selected as approved, others as not_selected."""
+    """Team Lead completes review: marks selected as approved, on_hold, or not_selected."""
     batch = await db.review_batches.find_one({"batch_id": batch_id})
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
     
     all_ids = batch.get("application_ids", [])
-    not_selected_ids = [aid for aid in all_ids if aid not in approved_ids]
+    not_selected_ids = [aid for aid in all_ids if aid not in approved_ids and aid not in on_hold_ids]
     
     # Update approved applications
     for app_id in approved_ids:
@@ -296,6 +297,19 @@ async def complete_review(
             {
                 "$set": {
                     "review_status": "approved",
+                    "reviewed_at": datetime.utcnow(),
+                    "reviewed_by": current_user.id
+                }
+            }
+        )
+    
+    # Update on hold applications
+    for app_id in on_hold_ids:
+        await db.applications.update_one(
+            {"_id": ObjectId(app_id)},
+            {
+                "$set": {
+                    "review_status": "on_hold",
                     "reviewed_at": datetime.utcnow(),
                     "reviewed_by": current_user.id
                 }
@@ -534,3 +548,59 @@ async def get_comments(
         raise HTTPException(status_code=404, detail="Application not found")
     
     return {"comments": app.get("comments", [])}
+
+
+@router.post("/mark-on-hold")
+async def mark_on_hold(
+    application_ids: List[str] = Body(..., embed=True),
+    current_user: UserInDB = Depends(check_role([UserRole.RECRUITER, UserRole.ADMIN])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Recruiter marks candidates as 'on hold' (staged)."""
+    if not application_ids:
+        raise HTTPException(status_code=400, detail="No applications selected")
+    
+    # Update all applications to on_hold status
+    for app_id in application_ids:
+        await db.applications.update_one(
+            {"_id": ObjectId(app_id)},
+            {
+                "$set": {
+                    "review_status": "on_hold",
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+    
+    return {
+        "success": True,
+        "message": f"Marked {len(application_ids)} candidate(s) as on hold"
+    }
+
+
+@router.post("/restore-pending")
+async def restore_pending(
+    application_ids: List[str] = Body(..., embed=True),
+    current_user: UserInDB = Depends(check_role([UserRole.RECRUITER, UserRole.ADMIN])),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    """Recruiter restores 'on hold' candidates back to 'pending' (Needs Review)."""
+    if not application_ids:
+        raise HTTPException(status_code=400, detail="No applications selected")
+    
+    # Update all applications to pending status
+    for app_id in application_ids:
+        await db.applications.update_one(
+            {"_id": ObjectId(app_id)},
+            {
+                "$set": {
+                    "review_status": "pending",
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+    
+    return {
+        "success": True,
+        "message": f"Restored {len(application_ids)} candidate(s) to needs review"
+    }
